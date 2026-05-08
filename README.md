@@ -4,8 +4,8 @@
 >
 > URL 한 줄로 입장하는 실시간 협업 화이트보드. 채널(Channel) → 스토리(Story) 구조에서 다중 사용자가 Yjs CRDT로 동시 편집한다.
 
-![status](https://img.shields.io/badge/status-Phase%203%20in%20progress-FF3D5A?style=flat-square)
-![mvp](https://img.shields.io/badge/MVP-2%2F6%20phases-FF3D5A?style=flat-square)
+![status](https://img.shields.io/badge/status-Phase%204%20in%20progress-FF3D5A?style=flat-square)
+![mvp](https://img.shields.io/badge/MVP-3%2F6%20phases-FF3D5A?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-4FD1C5?style=flat-square)
 [![repo](https://img.shields.io/badge/github-jinhalim%2Fonuri--studio-9A9AA8?style=flat-square&logo=github)](https://github.com/jinhalim/onuri-studio)
 
@@ -38,12 +38,13 @@
 | 2026-05-08 | D-007 | 익명 닉네임 색상 | 랜덤 배정 + **같은 채널 내 충돌 회피** ([§ 17.2](DESIGN.md#172-d-007-색상-충돌-회피-알고리즘-상세)) |
 | 2026-05-08 | D-008 | 관리자 권한 부여 | MVP는 **SQL 직접**, 사용자 증가 시 `/admin` promote UI 추가 |
 | 2026-05-08 | D-009 | Yjs 스냅샷 보존 | **일별 1개 + 직전 5개 롤링** ([§ 17.3](DESIGN.md#173-d-009-스냅샷-보존-구현-메모)) |
+| 2026-05-08 | D-010 | Realtime 드라이버 *(O-008 해결)* | **Supabase Realtime broadcast + presence** (tldraw store diff, last-write-wins) |
 
 ### ⏳ 미해결 (사용자 검토 대기)
 
 | # | 항목 | 결정 시점 | 비고 |
 | --- | --- | --- | --- |
-| O-008 | **Realtime 드라이버** (y-websocket vs Supabase Realtime) | Phase 4 시작 시 PoC | 무엇이 좋은지 모르겠다 → Phase 4 진입 직전 1~2일 PoC로 결정 |
+| ~~O-008~~ | ~~Realtime 드라이버~~ | **✅ D-010 으로 해결** | Supabase Realtime 채택 |
 | O-009 | **썸네일 생성 방식** (클라이언트 캡처 vs 서버 puppeteer) | Phase 2 또는 Phase 5 | Channel Guide 페이지의 스토리 카드 미리보기 그림 용도 |
 | O-012 | **SSO 우선순위** (Google만 / Google+GitHub / 4종) | Phase 7 시작 전 | |
 | O-013 | **Google Workspace 통합 깊이** | Phase 8 시작 전 | |
@@ -54,8 +55,8 @@
 ## 📊 전체 진행률
 
 ```
-전체:        [████░░░░░░░░░░░░░░░░]  22%   (2 / 9 phases)
-MVP (1~6):   [██████░░░░░░░░░░░░░░]  33%   (2 / 6 phases)
+전체:        [██████░░░░░░░░░░░░░░]  33%   (3 / 9 phases)
+MVP (1~6):   [██████████░░░░░░░░░░]  50%   (3 / 6 phases)
 확장 (7~9):  [░░░░░░░░░░░░░░░░░░░░]   0%   (0 / 3 phases)
 ```
 
@@ -93,8 +94,8 @@ gantt
 | ----- | --------------------------------------------- | ------ | ---------------------- |
 | 1     | 브랜딩 + 익명 인증 + 도메인 추상화            | ✅ 완료 | `[██████████] 100%` |
 | 2     | 채널/스토리 CRUD + 마이페이지 골격            | ✅ 완료 | `[██████████] 100%` |
-| 3     | 단일 사용자 화이트보드 + 자동 저장            | 🟢 진행 | `[░░░░░░░░░░]   0%` |
-| 4     | Yjs 동기화 + Presence + On Air                | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
+| 3     | 단일 사용자 화이트보드 + 자동 저장            | ✅ 완료 | `[██████████] 100%` |
+| 4     | Realtime 동기화 + Presence + On Air           | 🟢 진행 | `[░░░░░░░░░░]   0%` |
 | 5     | 내보내기/가져오기 + 관리자                    | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
 | 6     | 보안 강화 + 모바일 + 스테이징                 | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
 | 7     | Google SSO *(확장)*                           | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
@@ -176,8 +177,8 @@ gantt
 
 </details>
 
-<details open>
-<summary><b>Phase 3 — 단일 사용자 화이트보드 + 자동 저장</b> 🟢</summary>
+<details>
+<summary><b>Phase 3 — 단일 사용자 화이트보드 + 자동 저장</b> ✅</summary>
 
 **저장 형식 결정**: tldraw 네이티브 snapshot (JSON → bytea). Phase 4에서 Yjs로 전환.
 
@@ -203,16 +204,21 @@ gantt
 
 </details>
 
-<details>
-<summary><b>Phase 4 — Yjs 동기화 + Presence + On Air</b> ⏸</summary>
+<details open>
+<summary><b>Phase 4 — Realtime 동기화 + Presence + On Air</b> 🟢</summary>
 
-- [ ] y-websocket 서버 호스팅 결정 (Fly.io vs Supabase Realtime PoC)
-- [ ] `useYDoc` 훅 (provider 라이프사이클 + IndexedDB 캐시)
-- [ ] `usePresence` 훅 (awareness 기반 커서/닉네임/색상)
-- [ ] `PresenceLayer` 컴포넌트 (커서 트레일 + 보간 이동)
-- [ ] `OnAirIndicator` 컴포넌트 (빨간 펄스, Framer Motion)
+**드라이버 결정 (D-010)**: Supabase Realtime broadcast + presence. tldraw store diff 를 last-write-wins 으로 전송. Yjs 마이그레이션은 후순위.
+
+- [x] D-010 결정 (O-008 해결)
+- [ ] `lib/hooks/useStoryRealtime` (채널 구독 + broadcast + presence track)
+- [ ] `components/brand/OnAirIndicator` (Tailwind animate-pulse-rec)
+- [ ] `components/canvas/PresenceLayer` (다른 사용자 커서 + 닉네임 라벨)
+- [ ] `StudioCanvas` 통합:
+  - [ ] 사용자 변경 감지 → broadcast (소유자만, 방문자는 수신만)
+  - [ ] 원격 변경 수신 → `editor.store.mergeRemoteChanges()`로 무한 루프 방지
+  - [ ] 포인터 이동 → presence cursor 갱신 (60fps 스로틀)
+  - [ ] On Air 표시 (누군가 그리는 중 표시)
 - [ ] 두 브라우저로 50ms 이내 동기화 확인
-- [ ] 동시 접속 20명 부하 테스트
 
 </details>
 

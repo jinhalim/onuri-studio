@@ -419,12 +419,13 @@ ExternalIntegration {
 | 2026-05-08 | D-008 | 관리자 권한 부여 | **MVP는 Supabase SQL 직접 변경**, 사용자 증가 시 `/admin` promote UI 추가 | §3 (`role: 'user' \| 'admin'` 변경 절차 명시) |
 | 2026-05-08 | D-009 | Yjs 스냅샷 보존 정책 | **일별 1개 + 직전 5개 롤링** (구현 메모는 [`DESIGN.md` § 17.3](DESIGN.md#173-d-009-스냅샷-보존-구현-메모)) | §6 (`y_doc_snapshot` 단일 컬럼 + `story_snapshots` 신규 테이블) |
 | 2026-05-08 | D-EMAIL | 이메일 매직 링크 활성화 시점 | **Phase 9로 이동** (커스텀 도메인 + Resend DKIM/SPF와 묶음). MVP는 익명 트랙만 활성화. | §4, §5, §11 (Phase 1에서 email 활성 → Phase 9로 이동) |
+| 2026-05-08 | D-010 | Realtime 드라이버 (O-008 해결) | **Supabase Realtime broadcast + presence** + tldraw store diff (last-write-wins). Yjs는 후속 마이그레이션. | §8 (Yjs + y-websocket 명시 → Supabase Realtime 채택) |
 
 ### A.2 미해결 결정 (Open)
 
 | # | 항목 | 결정 시점 | 사용자 메모 |
 | --- | --- | --- | --- |
-| O-008 | Realtime 드라이버 (y-websocket vs Supabase Realtime) | Phase 4 시작 시 PoC | "뭐가 좋은지 모르겠음" → Phase 4 진입 직전 비교 PoC |
+| ~~O-008~~ | ~~Realtime 드라이버~~ | **D-010 으로 해결 (Supabase Realtime 채택)** | Phase 4 진입 시 결정 |
 | O-009 | 썸네일 생성 방식 | Phase 2 또는 Phase 5 | "어느 부분을 말하는지 모르겠음" → README "결정 이력" 섹션에 용도 설명 보강됨 |
 | O-012 | SSO 우선순위 (Google만 / Google+GitHub / 4종) | Phase 7 시작 전 | |
 | O-013 | Google Workspace 통합 깊이 | Phase 8 시작 전 | |

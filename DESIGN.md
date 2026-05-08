@@ -939,6 +939,7 @@ provider.destroy() + 마지막 스냅샷 flush
 | 2026-05-08 | D-007 | 익명 닉네임 색상 팔레트 | **랜덤 배정 + 같은 채널/스토리 내 충돌 회피** | 같은 공간 내 다른 사용자 색상은 즉시 식별 가능해야 함 |
 | 2026-05-08 | D-008 | 관리자 권한 부여 | **MVP는 Supabase SQL 직접 변경, 사용자 증가 시 `/admin` promote UI 추가** | MVP 단순성 |
 | 2026-05-08 | D-009 | Yjs 스냅샷 보존 정책 | **일별 1개 + 직전 5개 롤링** | 500MB 무료 티어 안전 + 즉시 롤백 + 장기 백업 균형 |
+| 2026-05-08 | D-010 | Realtime 드라이버 (O-008 해결) | **Supabase Realtime broadcast + presence** (tldraw store diff, last-write-wins) | 별도 WebSocket 인프라 불필요. Yjs CRDT는 후속 마이그레이션으로 점진 전환 가능 (같은 채널에 메시지 타입 추가). MVP 동시 편집 충돌은 last-write-wins 으로 수용. |
 
 ### 17.2 D-007 색상 충돌 회피 알고리즘 상세
 
@@ -974,7 +975,7 @@ const PALETTE = [
 
 | # | 항목 | 결정 시점 | 비고 |
 | --- | --- | --- | --- |
-| O-008 | Realtime 드라이버 (y-websocket vs Supabase Realtime) | Phase 4 시작 시 PoC | 사용자 추가 정보 요청 → 본 문서 § 9.3에 비교 표 유지 |
+| ~~O-008~~ | ~~Realtime 드라이버~~ | **D-010 으로 해결 (Supabase Realtime 채택)** | |
 | O-009 | 썸네일 생성 방식 (클라이언트 캡처 vs 서버 puppeteer) | Phase 2 또는 Phase 5 | 사용자 추가 설명 요청 → README "결정 이력" 섹션에 설명 보강 |
 | O-012 | SSO 우선순위 (Google만 / Google+GitHub / 4종) | Phase 7 시작 전 | |
 | O-013 | Google Workspace 통합 깊이 (임베드만 / 양방향 / 전체 동기화) | Phase 8 시작 전 | |

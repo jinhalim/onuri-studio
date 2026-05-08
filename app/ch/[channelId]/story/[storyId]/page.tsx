@@ -66,6 +66,7 @@ export default async function StoryPage({ params }: StoryPageProps) {
           storyId={story.id}
           initialSnapshotJson={initialSnapshotJson}
           canEdit={canEdit}
+          user={user}
         />
       </section>
     </main>
