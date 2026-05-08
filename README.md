@@ -4,8 +4,8 @@
 >
 > URL 한 줄로 입장하는 실시간 협업 화이트보드. 채널(Channel) → 스토리(Story) 구조에서 다중 사용자가 Yjs CRDT로 동시 편집한다.
 
-![status](https://img.shields.io/badge/status-Phase%201%20in%20progress-FF3D5A?style=flat-square)
-![mvp](https://img.shields.io/badge/MVP-0%2F6%20phases-FF3D5A?style=flat-square)
+![status](https://img.shields.io/badge/status-Phase%202%20in%20progress-FF3D5A?style=flat-square)
+![mvp](https://img.shields.io/badge/MVP-1%2F6%20phases-FF3D5A?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-4FD1C5?style=flat-square)
 [![repo](https://img.shields.io/badge/github-jinhalim%2Fonuri--studio-9A9AA8?style=flat-square&logo=github)](https://github.com/jinhalim/onuri-studio)
 
@@ -54,8 +54,8 @@
 ## 📊 전체 진행률
 
 ```
-전체:        [░░░░░░░░░░░░░░░░░░░░]   0%   (0 / 9 phases)
-MVP (1~6):   [░░░░░░░░░░░░░░░░░░░░]   0%   (0 / 6 phases)
+전체:        [██░░░░░░░░░░░░░░░░░░]  11%   (1 / 9 phases)
+MVP (1~6):   [███░░░░░░░░░░░░░░░░░]  17%   (1 / 6 phases)
 확장 (7~9):  [░░░░░░░░░░░░░░░░░░░░]   0%   (0 / 3 phases)
 ```
 
@@ -91,8 +91,8 @@ gantt
 
 | Phase | 제목                                          | 상태   | 진행률                 |
 | ----- | --------------------------------------------- | ------ | ---------------------- |
-| 1     | 브랜딩 + 익명 인증 + 도메인 추상화            | 🟢 진행 | `[████████░░]  85%` |
-| 2     | 채널/스토리 CRUD + 마이페이지 골격            | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
+| 1     | 브랜딩 + 익명 인증 + 도메인 추상화            | ✅ 완료 | `[██████████] 100%` |
+| 2     | 채널/스토리 CRUD + 마이페이지 골격            | 🟢 진행 | `[░░░░░░░░░░]   0%` |
 | 3     | 단일 사용자 화이트보드 + 자동 저장            | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
 | 4     | Yjs 동기화 + Presence + On Air                | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
 | 5     | 내보내기/가져오기 + 관리자                    | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
@@ -109,8 +109,8 @@ gantt
 
 각 항목은 PR 또는 커밋이 머지될 때 체크한다. 세부 산출물 정의는 [`DESIGN.md`](DESIGN.md)의 § 13 참조.
 
-<details open>
-<summary><b>Phase 1 — 브랜딩 + 익명 인증 + 도메인 추상화</b> 🟢</summary>
+<details>
+<summary><b>Phase 1 — 브랜딩 + 익명 인증 + 도메인 추상화</b> ✅</summary>
 
 **코드 작업** (완료):
 - [x] **pnpm** + Next.js 14 App Router + TypeScript + Tailwind 프로젝트 초기화 *(D-005)*
@@ -131,26 +131,48 @@ gantt
 - [x] `pnpm run typecheck` 통과
 - [x] `pnpm run dev` 부팅 + `GET / 200 OK` 검증
 
-**사용자 작업** (Supabase 설정 + 동작 검증):
-- [ ] supabase.com 무료 프로젝트 생성 *(D-003)*
-- [ ] `.env.local` 작성 (URL / anon key / service_role key)
-- [ ] SQL Editor에서 `supabase/migrations/0001~0004.sql` 차례로 실행
-- [ ] `pnpm run dev` 후 두 브라우저로 닉네임 입장 → 다른 색 자동 배정 확인
-- [ ] 새로고침 후 세션 유지 확인
+**사용자 작업** (완료):
+- [x] supabase.com 무료 프로젝트 생성 *(D-003)*
+- [x] `.env.local` 작성 (URL / anon key / service_role key)
+- [x] SQL Editor에서 `supabase/migrations/0001~0004.sql` 차례로 실행
+- [x] 닉네임 입장 → 색상 자동 배정 + 세션 유지 동작 확인
 
 </details>
 
-<details>
-<summary><b>Phase 2 — 채널/스토리 CRUD + 마이페이지 골격</b> ⏸</summary>
+<details open>
+<summary><b>Phase 2 — 채널/스토리 CRUD + 마이페이지 골격</b> 🟢</summary>
 
-- [ ] `POST /api/channels` (nanoid 12자, 충돌 시 재시도)
-- [ ] `/ch/[channelId]` Channel Guide 페이지 (스토리 카드 그리드)
-- [ ] `StoryCard` 컴포넌트 (썸네일/제목/마지막 수정일/On Air 자리)
-- [ ] `POST /api/stories` (기본 제목 "이름 N" 자동 부여)
-- [ ] `DELETE /api/stories/:id`
-- [ ] `participations` 자동 기록 (방문 시 `last_visited_at` 갱신)
-- [ ] `/me` 마이페이지 정적 골격 (회원만 접근, MVP에선 빈 상태)
-- [ ] 공유 버튼 (URL 클립보드 복사)
+**도메인/유즈케이스**:
+- [ ] `lib/security/validators` — channelNameSchema / storyTitleSchema 추가
+- [ ] `lib/usecases/create-channel.ts` (nanoid 12자, 충돌 시 5회 재시도)
+- [ ] `lib/usecases/list-my-channels.ts`
+- [ ] `lib/usecases/get-channel-with-stories.ts`
+- [ ] `lib/usecases/create-story.ts` (기본 제목 "이름 N" 자동)
+- [ ] `lib/usecases/delete-story.ts`
+- [ ] `lib/usecases/record-participation.ts` (방문 시 `last_visited_at` 갱신)
+
+**Server Actions**:
+- [ ] `app/actions/create-channel.ts`
+- [ ] `app/actions/create-story.ts`
+- [ ] `app/actions/delete-story.ts`
+
+**컴포넌트**:
+- [ ] `components/channel/StoryCard.tsx` (썸네일/제목/마지막 수정일/On Air placeholder)
+- [ ] `components/channel/ChannelList.tsx`
+- [ ] `components/channel/CreateChannelForm.tsx`
+- [ ] `components/channel/CreateStoryButton.tsx`
+- [ ] `components/channel/DeleteStoryButton.tsx`
+- [ ] `components/share/ShareButton.tsx` (URL 클립보드 복사)
+
+**페이지**:
+- [ ] `app/page.tsx` 갱신 — 로그인 시 채널 목록 + 새 채널 만들기
+- [ ] `app/ch/[channelId]/page.tsx` — Channel Guide
+- [ ] `app/me/page.tsx` — 마이페이지 (익명도 자기 채널 목록 확인 가능)
+
+**검증**:
+- [ ] typecheck / lint / build 통과
+- [ ] 채널 생성 → URL 공유 → 다른 브라우저로 조회 확인
+- [ ] 스토리 생성 / 삭제 / participations 기록 확인
 
 </details>
 

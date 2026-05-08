@@ -6,9 +6,32 @@ import { cn } from '@/lib/utils';
 
 interface SignedInBannerProps {
   user: User;
+  /** 우측 정렬용 컴팩트 모드 (랜딩/마이페이지 헤더용). */
+  compact?: boolean;
 }
 
-export function SignedInBanner({ user }: SignedInBannerProps) {
+export function SignedInBanner({ user, compact = false }: SignedInBannerProps) {
+  if (compact) {
+    return (
+      <div className="flex items-center gap-3 text-sm">
+        <span
+          aria-hidden
+          className="h-3 w-3 rounded-full ring-1 ring-divider"
+          style={{ backgroundColor: user.color }}
+        />
+        <span className="text-fg">{user.nickname}</span>
+        <form action={signOut}>
+          <button
+            type="submit"
+            className="text-xs text-fg-muted underline-offset-4 hover:text-fg hover:underline"
+          >
+            나가기
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -26,9 +49,6 @@ export function SignedInBanner({ user }: SignedInBannerProps) {
           안녕하세요, <strong>{user.nickname}</strong> 님
         </span>
       </div>
-      <p className="text-sm text-fg-muted">
-        지금은 익명 트랙입니다. 채널/스토리 기능은 Phase 2에서 추가됩니다.
-      </p>
       <form action={signOut}>
         <button
           type="submit"
