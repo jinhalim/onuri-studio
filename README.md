@@ -4,8 +4,8 @@
 >
 > URL 한 줄로 입장하는 실시간 협업 화이트보드. 채널(Channel) → 스토리(Story) 구조에서 다중 사용자가 Yjs CRDT로 동시 편집한다.
 
-![status](https://img.shields.io/badge/status-Phase%202%20in%20progress-FF3D5A?style=flat-square)
-![mvp](https://img.shields.io/badge/MVP-1%2F6%20phases-FF3D5A?style=flat-square)
+![status](https://img.shields.io/badge/status-Phase%203%20in%20progress-FF3D5A?style=flat-square)
+![mvp](https://img.shields.io/badge/MVP-2%2F6%20phases-FF3D5A?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-4FD1C5?style=flat-square)
 [![repo](https://img.shields.io/badge/github-jinhalim%2Fonuri--studio-9A9AA8?style=flat-square&logo=github)](https://github.com/jinhalim/onuri-studio)
 
@@ -54,8 +54,8 @@
 ## 📊 전체 진행률
 
 ```
-전체:        [██░░░░░░░░░░░░░░░░░░]  11%   (1 / 9 phases)
-MVP (1~6):   [███░░░░░░░░░░░░░░░░░]  17%   (1 / 6 phases)
+전체:        [████░░░░░░░░░░░░░░░░]  22%   (2 / 9 phases)
+MVP (1~6):   [██████░░░░░░░░░░░░░░]  33%   (2 / 6 phases)
 확장 (7~9):  [░░░░░░░░░░░░░░░░░░░░]   0%   (0 / 3 phases)
 ```
 
@@ -92,8 +92,8 @@ gantt
 | Phase | 제목                                          | 상태   | 진행률                 |
 | ----- | --------------------------------------------- | ------ | ---------------------- |
 | 1     | 브랜딩 + 익명 인증 + 도메인 추상화            | ✅ 완료 | `[██████████] 100%` |
-| 2     | 채널/스토리 CRUD + 마이페이지 골격            | 🟢 진행 | `[░░░░░░░░░░]   0%` |
-| 3     | 단일 사용자 화이트보드 + 자동 저장            | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
+| 2     | 채널/스토리 CRUD + 마이페이지 골격            | ✅ 완료 | `[██████████] 100%` |
+| 3     | 단일 사용자 화이트보드 + 자동 저장            | 🟢 진행 | `[░░░░░░░░░░]   0%` |
 | 4     | Yjs 동기화 + Presence + On Air                | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
 | 5     | 내보내기/가져오기 + 관리자                    | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
 | 6     | 보안 강화 + 모바일 + 스테이징                 | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
@@ -139,8 +139,8 @@ gantt
 
 </details>
 
-<details open>
-<summary><b>Phase 2 — 채널/스토리 CRUD + 마이페이지 골격</b> 🟢</summary>
+<details>
+<summary><b>Phase 2 — 채널/스토리 CRUD + 마이페이지 골격</b> ✅</summary>
 
 **도메인/유즈케이스**:
 - [ ] `lib/security/validators` — channelNameSchema / storyTitleSchema 추가
@@ -176,18 +176,30 @@ gantt
 
 </details>
 
-<details>
-<summary><b>Phase 3 — 단일 사용자 화이트보드 + 자동 저장</b> ⏸</summary>
+<details open>
+<summary><b>Phase 3 — 단일 사용자 화이트보드 + 자동 저장</b> 🟢</summary>
 
-- [ ] tldraw 통합 (`StudioCanvas` 래퍼)
-- [ ] Remote 도구바 (펜/사각형/원/화살표/텍스트/스티키/지우개)
-- [ ] 무한 캔버스 (팬/줌)
-- [ ] Undo/Redo (사용자별)
-- [ ] `StoryTitleInline` 컴포넌트 (Enter/blur 저장, Esc 롤백)
-- [ ] `PATCH /api/stories/:id/title`
-- [ ] 5초 debounce로 `y_doc_snapshot` Postgres 저장
-- [ ] 새로고침 후 도형/제목 복원 확인
-- [ ] 단축키 V/H/R/O/T/N, Cmd+Z, Cmd+Shift+Z
+**저장 형식 결정**: tldraw 네이티브 snapshot (JSON → bytea). Phase 4에서 Yjs로 전환.
+
+**유즈케이스 / Server Actions**:
+- [ ] `lib/usecases/save-story-snapshot.ts` (bytea 저장)
+- [ ] `lib/usecases/load-story-snapshot.ts` (bytea → JSON 복원)
+- [ ] `lib/usecases/update-story-title.ts`
+- [ ] `app/actions/save-story-snapshot.ts` (5초 debounce 클라이언트에서 호출)
+- [ ] `app/actions/update-story-title.ts`
+
+**컴포넌트**:
+- [ ] `components/canvas/StudioCanvas.tsx` (tldraw 래퍼 + auto-save listener)
+- [ ] `components/story/StoryTitleInline.tsx` (상태 머신: idle ↔ editing ↔ saving)
+- [ ] tldraw 기본 도구바 그대로 사용 (펜/사각형/원/화살표/텍스트/스티키/지우개 + 단축키 자동)
+
+**페이지**:
+- [ ] `app/ch/[channelId]/story/[storyId]/page.tsx` (whiteboard)
+
+**검증**:
+- [ ] typecheck / lint / build 통과
+- [ ] 브라우저: 도형 그리기 → 5초 후 자동 저장 → 새로고침 시 복원
+- [ ] 제목 인라인 편집: Enter/blur 저장, Esc 롤백, 빈 값 롤백
 
 </details>
 
