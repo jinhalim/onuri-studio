@@ -5,6 +5,7 @@ import type { User } from '@/lib/domain/user';
 import { useChannelPresence } from '@/lib/hooks/useChannelPresence';
 import { StoryCard } from './StoryCard';
 import { CreateStoryButton } from './CreateStoryButton';
+import { ImportStoryButton } from './ImportStoryButton';
 
 interface ChannelStoriesSectionProps {
   stories: Story[];
@@ -50,6 +51,7 @@ export function ChannelStoriesSection({
           );
         })}
         {canEdit && <CreateStoryButton channelId={channelId} />}
+        {canEdit && <ImportStoryButton channelId={channelId} />}
       </div>
       {!canEdit && stories.length === 0 && (
         <p className="rounded-md border border-dashed border-divider bg-brand-surface/40 px-4 py-6 text-center text-sm text-fg-muted">

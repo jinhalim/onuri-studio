@@ -7,6 +7,7 @@ import type { Editor, TLRecord } from 'tldraw';
 import { SignedInBanner } from '@/components/auth/SignedInBanner';
 import { StoryTitleInline } from '@/components/story/StoryTitleInline';
 import { LaserShareToggle, type LaserShareMode } from '@/components/story/LaserShareToggle';
+import { ExportButton } from '@/components/story/ExportButton';
 import { ShareButton } from '@/components/share/ShareButton';
 import {
   StudioCanvas,
@@ -315,6 +316,13 @@ export function StoryWorkspace({
           <PresenceList presences={presences} currentUserId={realtimeUser.id} />
           <RealtimeStatusBadge status={displayStatus} />
           <LaserShareToggle mode={laserShareMode} onChange={setLaserShareMode} />
+          <ExportButton
+            editorRef={editorRef}
+            fileName={story.title}
+            storyId={story.id}
+            exporterNickname={realtimeUser.nickname}
+            appVersion="0.1.0"
+          />
           <ShareButton url={shareUrl} label="스토리 URL 공유" />
           {user && <SignedInBanner user={user} compact />}
         </div>

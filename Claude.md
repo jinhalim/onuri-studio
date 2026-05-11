@@ -431,6 +431,8 @@ ExternalIntegration {
 | O-012 | SSO 우선순위 (Google만 / Google+GitHub / 4종) | Phase 7 시작 전 | |
 | O-013 | Google Workspace 통합 깊이 | Phase 8 시작 전 | |
 | O-014 | 이메일 발신자 표기 (`noreply@` / `hello@` / `studio@`) | Phase 9 도메인 인증 시 | |
+| O-015 | **채널 권한 시스템** (수정 권한 요청/부여, 알림 inbox, 익명/로그인 구분, 대표 이미지) | MVP 후 또는 인증 방식 결정 후 | C 그룹 검토했으나 D-EMAIL 뒤집기 필요 + 작업량 큼 → MVP Phase 5 다른 항목 우선. CLAUDE.md §5 의 "Could (확장)" 와 일관 |
+| O-016 | **인증 방식 — 이메일 매직 링크 대신 다른 방식 검토** | O-012 결정과 함께 또는 Phase 7 | 사용자 명시 의사: "이메일 대신 다른 인증 방식". Google SSO 우선 여부는 O-012 와 묶어서 결정 |
 
 ### A.3 결정 이력 갱신 규칙
 

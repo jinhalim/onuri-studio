@@ -1011,6 +1011,8 @@ const CustomNoteShapeUtil = NoteShapeUtil.configure({
 | O-012 | SSO 우선순위 (Google만 / Google+GitHub / 4종) | Phase 7 시작 전 | |
 | O-013 | Google Workspace 통합 깊이 (임베드만 / 양방향 / 전체 동기화) | Phase 8 시작 전 | |
 | O-014 | 이메일 발신자 표기 (`noreply@` / `hello@` / `studio@`) | Phase 9 도메인 인증 시 | |
+| O-015 | 채널 권한 시스템 (수정 권한 요청·알림 inbox·익명/로그인 구분·대표 이미지) | MVP 후 또는 인증 결정 후 | C 그룹 검토 후 보류. CLAUDE.md §5 Could 항목 |
+| O-016 | 인증 방식 — 이메일 매직 링크 대신 다른 방식 (SSO 등) 검토 | O-012 와 함께 | 사용자 의사로 이메일 매직 링크 활성화 보류 |
 
 ---
 

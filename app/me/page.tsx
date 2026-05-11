@@ -3,8 +3,10 @@ import { redirect } from 'next/navigation';
 import { Wordmark } from '@/components/brand/Wordmark';
 import { SignedInBanner } from '@/components/auth/SignedInBanner';
 import { ChannelList } from '@/components/channel/ChannelList';
+import { HistoryChannelCard } from '@/components/me/HistoryChannelCard';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { listMyChannels } from '@/lib/usecases/list-my-channels';
+import { getMyHistory } from '@/lib/usecases/get-my-history';
 
 // 마이페이지.
 // MVP 정책: 익명도 자기 채널 목록 확인 가능 (D-007 색이 정체성 역할).
@@ -14,7 +16,14 @@ export default async function MyPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/');
 
-  const myChannels = await listMyChannels(user.id);
+  // 독립적인 데이터 fetch 병렬화
+  const [myChannels, history] = await Promise.all([
+    listMyChannels(user.id),
+    getMyHistory(user.id),
+  ]);
+  // 본인 소유 채널은 "내가 만든 채널" 섹션에 이미 표시 → recent 에서 제외해서 중복 방지
+  const myChannelIds = new Set(myChannels.map((c) => c.id));
+  const recentVisits = history.recent.filter((h) => !myChannelIds.has(h.channelId));
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-10 px-6 py-12">
@@ -63,10 +72,42 @@ export default async function MyPage() {
         <ChannelList channels={myChannels} />
       </section>
 
-      {/* TODO[Phase5]: 최근 방문 채널 + 즐겨찾기 (participations 기반) */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold text-fg-muted">
+          즐겨찾기 ({history.favorites.length})
+        </h2>
+        {history.favorites.length === 0 ? (
+          <p className="rounded-md border border-dashed border-divider bg-brand-surface/40 px-4 py-6 text-center text-xs text-fg-muted">
+            아직 즐겨찾기한 채널이 없어요. 채널 카드의 ★ 를 눌러 추가할 수 있어요.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {history.favorites.map((item) => (
+              <HistoryChannelCard key={item.channelId} item={item} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold text-fg-muted">
+          최근 방문 ({recentVisits.length})
+        </h2>
+        {recentVisits.length === 0 ? (
+          <p className="rounded-md border border-dashed border-divider bg-brand-surface/40 px-4 py-6 text-center text-xs text-fg-muted">
+            다른 채널을 방문해 본 적이 없어요. URL 로 채널에 들어가면 여기에 기록돼요.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {recentVisits.map((item) => (
+              <HistoryChannelCard key={item.channelId} item={item} />
+            ))}
+          </div>
+        )}
+      </section>
 
       <footer className="mt-auto pt-12 text-xs text-fg-muted/70">
-        Phase 2 — 마이페이지 골격 / 즐겨찾기·최근 방문은 Phase 5부터
+        Phase 5 — 마이페이지 히스토리 (최근 방문 + 즐겨찾기)
       </footer>
     </main>
   );
