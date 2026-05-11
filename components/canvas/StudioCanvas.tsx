@@ -9,104 +9,59 @@ import {
 } from 'tldraw';
 import 'tldraw/tldraw.css';
 import { saveStorySnapshotAction } from '@/app/actions/save-story-snapshot';
-import { useStoryRealtime, type SyncPayload } from '@/lib/hooks/useStoryRealtime';
-import { useChannelPresence } from '@/lib/hooks/useChannelPresence';
-import { OnAirIndicator } from '@/components/brand/OnAirIndicator';
-import { PresenceList } from '@/components/presence/PresenceList';
+import type { PresenceState, SyncPayload } from '@/lib/hooks/useStoryRealtime';
 import { PresenceLayer } from './PresenceLayer';
 import { cn } from '@/lib/utils';
-import type { User } from '@/lib/domain/user';
 
 const AUTOSAVE_DEBOUNCE_MS = 5_000;
 const CURSOR_THROTTLE_MS = 33; // ~30Hz
-const DRAWING_RESET_MS = 800; // 마지막 변경 후 0.8초 동안 그리는 중 표시
+const DRAWING_RESET_MS = 800;
+
+// 캔버스 본체. realtime 구독은 StoryWorkspace 가 관리하고
+// 본 컴포넌트는 broadcast/updatePresence 콜백을 받아 사용한다.
+//
+// 화면 표시:
+// - 좌상단: PresenceLayer (다른 사용자 커서) — tldraw UI 위에 띄우지 않음 (z-index 조정)
+// - 우상단: 저장 인디케이터 / 읽기 전용 배지 (작은 floating)
+// PresenceList / OnAir / RealtimeStatus 는 부모(StoryWorkspace) 헤더에서 처리.
 
 interface StudioCanvasProps {
   storyId: string;
-  channelId: string;
   initialSnapshotJson: string | null;
   canEdit: boolean;
-  /** 로그인한 사용자. 비로그인이면 null (이 경우 realtime 비활성). */
-  user: User | null;
+  presences: PresenceState[];
+  currentUserId: string;
+  broadcast: (changes: Omit<SyncPayload, 'fromUserId'>) => void;
+  updatePresence: (
+    partial: Partial<Omit<PresenceState, 'userId' | 'nickname' | 'color'>>,
+  ) => void;
+  /** editor 인스턴스가 마운트/언마운트 될 때 부모에 알림 (handleRemoteSync 용). */
+  onEditorMount: (editor: Editor | null) => void;
+  /** 본인이 그리는 중 상태 변화 (channel-level presence 동기화용). */
+  onLocalDrawingChange: (isDrawing: boolean) => void;
 }
 
 type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
 
 export function StudioCanvas({
   storyId,
-  channelId,
   initialSnapshotJson,
   canEdit,
-  user,
+  presences,
+  currentUserId,
+  broadcast,
+  updatePresence,
+  onEditorMount,
+  onLocalDrawingChange,
 }: StudioCanvasProps) {
   const [status, setStatus] = useState<SaveStatus>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
-  const [isDrawingLocal, setIsDrawingLocal] = useState(false);
 
   const editorRef = useRef<Editor | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cursorTimerRef = useRef<number>(0);
   const drawingResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // 원격 sync 적용 (loop 방지: mergeRemoteChanges 안에서 적용 → 'user' source 안 씀)
-  const handleRemoteSync = useCallback((payload: SyncPayload) => {
-    const ed = editorRef.current;
-    if (!ed) {
-      console.warn('[StudioCanvas] handleRemoteSync: editor 미준비');
-      return;
-    }
-    ed.store.mergeRemoteChanges(() => {
-      try {
-        if (payload.added && payload.added.length > 0) {
-          ed.store.put(payload.added as TLRecord[]);
-        }
-        if (payload.updated && payload.updated.length > 0) {
-          ed.store.put(payload.updated as TLRecord[]);
-        }
-        if (payload.removed && payload.removed.length > 0) {
-          ed.store.remove(payload.removed as Parameters<typeof ed.store.remove>[0]);
-        }
-        console.log('[StudioCanvas] 원격 변경 적용 완료');
-      } catch (err) {
-        console.error('[StudioCanvas] 원격 변경 적용 실패:', err);
-      }
-    });
-  }, []);
-
-  // realtime: user가 있을 때만 의미있게 동작 (anonymous도 user 있음)
-  // user가 null인 경우엔 realtime 비활성. 안전한 dummy 인자 전달 후 status='error' 로 두어도 무관.
-  const realtimeUser = user ?? {
-    id: '__anon__',
-    nickname: '익명 방문자',
-    color: '#9A9AA8',
-    isAnonymous: true,
-    primaryAuthProvider: 'anonymous' as const,
-    linkedProviders: [],
-    role: 'user' as const,
-    email: null,
-    createdAt: '',
-    lastSeenAt: '',
-  };
-
-  const { presences, broadcast, updatePresence, status: realtimeStatus } = useStoryRealtime({
-    storyId,
-    user: realtimeUser,
-    onSync: handleRemoteSync,
-  });
-
-  // Channel Guide 페이지에서 "이 스토리 사용 중" 표시를 위해 channel-level presence 도 트래킹
-  useChannelPresence({
-    channelId,
-    user,
-    currentStoryId: storyId,
-    isDrawing: isDrawingLocal,
-  });
-
-  // 다른 사용자가 그리는 중인지 (On Air)
-  const someoneDrawing = presences.some(
-    (p) => p.userId !== realtimeUser.id && p.isDrawing,
-  );
 
   const flushSave = useCallback(async () => {
     const ed = editorRef.current;
@@ -131,46 +86,50 @@ export function StudioCanvas({
     }
   }, [storyId, canEdit]);
 
-  // editor.on('change-history') / store listener → broadcast + autosave + isDrawing 토글
   const handleStoreChange = useCallback(
-    (entry: { source: 'user' | 'remote'; changes: { added: Record<string, TLRecord>; updated: Record<string, [TLRecord, TLRecord]>; removed: Record<string, TLRecord> } }) => {
-      // 사용자 본인 변경만 처리. 'remote' source 는 우리가 mergeRemoteChanges 로 적용한 것이라 무시.
+    (entry: {
+      source: 'user' | 'remote';
+      changes: {
+        added: Record<string, TLRecord>;
+        updated: Record<string, [TLRecord, TLRecord]>;
+        removed: Record<string, TLRecord>;
+      };
+    }) => {
       if (entry.source !== 'user') return;
 
       const added = Object.values(entry.changes.added);
       const updated = Object.values(entry.changes.updated).map(([, next]) => next);
       const removed = Object.keys(entry.changes.removed);
 
-      // 1) broadcast (편집 권한과 무관하게 — 방문자는 어차피 변경 자체가 안 일어남)
       if (added.length || updated.length || removed.length) {
         broadcast({ added, updated, removed });
       }
 
-      // 2) On Air 표시 (스토리 채널 + 채널 레벨 모두)
+      // On Air 표시
       updatePresence({ isDrawing: true });
-      setIsDrawingLocal(true);
+      onLocalDrawingChange(true);
       if (drawingResetRef.current) clearTimeout(drawingResetRef.current);
       drawingResetRef.current = setTimeout(() => {
         updatePresence({ isDrawing: false });
-        setIsDrawingLocal(false);
+        onLocalDrawingChange(false);
       }, DRAWING_RESET_MS);
 
-      // 3) 자동 저장 (소유자만)
+      // 자동 저장 (소유자만)
       if (canEdit) {
         setStatus('pending');
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(flushSave, AUTOSAVE_DEBOUNCE_MS);
       }
     },
-    [broadcast, updatePresence, canEdit, flushSave],
+    [broadcast, updatePresence, onLocalDrawingChange, canEdit, flushSave],
   );
 
   const handleMount = useCallback(
     (ed: Editor) => {
       editorRef.current = ed;
       setEditor(ed);
+      onEditorMount(ed);
 
-      // 초기 snapshot 로드
       if (initialSnapshotJson) {
         try {
           const parsed = JSON.parse(initialSnapshotJson) as StoreSnapshot<TLRecord>;
@@ -184,58 +143,45 @@ export function StudioCanvas({
         ed.updateInstanceState({ isReadonly: true });
       }
 
-      // 'user' source 만 받기 위해 source: 'user' 옵션 사용.
-      // entry 의 형태가 우리가 정의한 것과 정확히 일치 (added/updated/removed)
       const unsubscribe = ed.store.listen(handleStoreChange, {
         source: 'user',
         scope: 'document',
       });
 
-      // 포인터 위치 → presence cursor 갱신 (스로틀 30Hz)
-      const handlePointerMove = () => {
-        const now = Date.now();
-        if (now - cursorTimerRef.current < CURSOR_THROTTLE_MS) return;
-        cursorTimerRef.current = now;
-        const point = ed.inputs.currentPagePoint;
-        updatePresence({ cursor: { x: point.x, y: point.y } });
-      };
+      // 포인터 이동 → presence cursor (30Hz 스로틀)
       ed.on('event', (info) => {
         if (info.type === 'pointer' && info.name === 'pointer_move') {
-          handlePointerMove();
+          const now = Date.now();
+          if (now - cursorTimerRef.current < CURSOR_THROTTLE_MS) return;
+          cursorTimerRef.current = now;
+          const point = ed.inputs.currentPagePoint;
+          updatePresence({ cursor: { x: point.x, y: point.y } });
         }
       });
 
       return unsubscribe;
     },
-    [initialSnapshotJson, canEdit, handleStoreChange, updatePresence],
+    [initialSnapshotJson, canEdit, handleStoreChange, updatePresence, onEditorMount],
   );
 
-  // 페이지 이탈 시 정리
+  // unmount 정리
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (drawingResetRef.current) clearTimeout(drawingResetRef.current);
+      onEditorMount(null);
     };
+    // onEditorMount는 매번 변하지 않는다고 가정 (StoryWorkspace에서 ref 캡처)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div className="relative h-full w-full">
       <Tldraw onMount={handleMount} />
-      <PresenceLayer
-        presences={presences}
-        editor={editor}
-        currentUserId={realtimeUser.id}
-      />
+      <PresenceLayer presences={presences} editor={editor} currentUserId={currentUserId} />
 
-      {/* 좌상단 presence + 연결 상태 */}
-      <div className="pointer-events-auto absolute left-4 top-4 z-50 flex flex-col items-start gap-2">
-        <PresenceList presences={presences} currentUserId={realtimeUser.id} />
-        <RealtimeStatusBadge status={realtimeStatus} />
-      </div>
-
-      {/* 우상단 상태 영역 */}
+      {/* 우상단: 저장 인디케이터 / 읽기 전용 배지만 (다른 정보는 헤더로) */}
       <div className="pointer-events-none absolute right-4 top-4 z-50 flex flex-col items-end gap-2">
-        <OnAirIndicator active={someoneDrawing} />
         {canEdit && <SaveIndicator status={status} errorMsg={errorMsg} onRetry={flushSave} />}
         {!canEdit && <ReadOnlyBadge />}
       </div>
@@ -264,13 +210,12 @@ function SaveIndicator({
   return (
     <div className="flex items-center gap-2">
       <div
-        className={
-          status === 'error'
-            ? 'rounded-sm border border-rec/40 bg-rec/10 px-3 py-1 text-xs text-rec'
-            : status === 'saved'
-              ? 'rounded-sm border border-live/40 bg-live/10 px-3 py-1 text-xs text-live'
-              : 'rounded-sm border border-divider bg-brand-bezel/80 px-3 py-1 text-xs text-fg-muted backdrop-blur-sm'
-        }
+        className={cn(
+          status === 'error' && 'rounded-sm border border-rec/40 bg-rec/10 px-3 py-1 text-xs text-rec',
+          status === 'saved' && 'rounded-sm border border-live/40 bg-live/10 px-3 py-1 text-xs text-live',
+          (status === 'saving' || status === 'pending') &&
+            'rounded-sm border border-divider bg-brand-bezel/80 px-3 py-1 text-xs text-fg-muted backdrop-blur-sm',
+        )}
       >
         {label}
       </div>
@@ -291,30 +236,6 @@ function ReadOnlyBadge() {
   return (
     <div className="rounded-sm border border-divider bg-brand-bezel/80 px-3 py-1 text-xs text-fg-muted backdrop-blur-sm">
       읽기 전용 (방문자 모드)
-    </div>
-  );
-}
-
-function RealtimeStatusBadge({
-  status,
-}: {
-  status: 'connecting' | 'connected' | 'closed' | 'error';
-}) {
-  const config = {
-    connecting: { label: '연결 중…', color: 'text-fg-muted', dot: 'bg-fg-muted/40 animate-pulse' },
-    connected: { label: '실시간 연결됨', color: 'text-live', dot: 'bg-live' },
-    closed: { label: '연결 끊김', color: 'text-fg-muted', dot: 'bg-fg-muted/40' },
-    error: { label: '연결 오류', color: 'text-rec', dot: 'bg-rec animate-pulse-rec' },
-  }[status];
-
-  return (
-    <div
-      className={cn(
-        'flex items-center gap-1.5 rounded-sm border border-divider bg-brand-bezel/80 px-2.5 py-1 backdrop-blur-sm',
-      )}
-    >
-      <span aria-hidden className={cn('h-1.5 w-1.5 rounded-full', config.dot)} />
-      <span className={cn('text-[10px] font-medium', config.color)}>{config.label}</span>
     </div>
   );
 }

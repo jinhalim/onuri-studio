@@ -74,7 +74,15 @@ export function useChannelPresence({
 
     channel.on('presence', { event: 'sync' }, () => {
       const state = channel.presenceState<ChannelPresence>();
-      const list = Object.values(state).flat();
+      // userId 단위 dedupe. 같은 사용자가 여러 탭이면 가장 최신/그리는 중인 항목 채택.
+      const dedupedMap = new Map<string, ChannelPresence>();
+      for (const p of Object.values(state).flat()) {
+        const existing = dedupedMap.get(p.userId);
+        if (!existing || (p.isDrawing && !existing.isDrawing)) {
+          dedupedMap.set(p.userId, p);
+        }
+      }
+      const list = Array.from(dedupedMap.values());
       if (!cancelled) setPresences(list);
     });
 

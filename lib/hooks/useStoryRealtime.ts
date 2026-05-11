@@ -104,8 +104,25 @@ export function useStoryRealtime({
       })
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState<PresenceState>();
-        const list = Object.values(state).flat();
-        console.log('[useStoryRealtime] presence sync:', list.length, '명 접속');
+        // 같은 user.id 가 여러 탭으로 접속하면 배열 길이가 N. userId 단위로 dedupe.
+        // 여러 탭 중 그리는 중인 탭이 있으면 그쪽을 우선 채택.
+        const dedupedMap = new Map<string, PresenceState>();
+        for (const p of Object.values(state).flat()) {
+          const existing = dedupedMap.get(p.userId);
+          if (!existing) {
+            dedupedMap.set(p.userId, p);
+          } else if (p.isDrawing && !existing.isDrawing) {
+            dedupedMap.set(p.userId, p);
+          }
+        }
+        const list = Array.from(dedupedMap.values());
+        console.log(
+          '[useStoryRealtime] presence sync:',
+          list.length,
+          '명 접속 (raw',
+          Object.values(state).flat().length,
+          ')',
+        );
         if (!cancelled) setPresences(list);
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
