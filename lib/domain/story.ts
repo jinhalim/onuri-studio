@@ -10,6 +10,8 @@ export interface Story {
   title: string; // 기본 "이름 N"
   titleUpdatedAt: string;
   createdAt: string;
+  /** 화이트보드 마지막 저장 시각. 한번도 save 안 됐으면 null. */
+  snapshotUpdatedAt: string | null;
   thumbnailUrl: string | null;
   externalLinks: ExternalLinks;
 }

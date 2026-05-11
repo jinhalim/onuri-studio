@@ -48,3 +48,33 @@
     color: var(--text-primary);
   }
 }
+
+/* ================================================================
+   tldraw v5 의 scribble 은 <canvas> 에 직접 렌더되어 DOM 요소가 없다
+   (CSS filter 적용 불가). 본인 레이저 발광 효과는 RemoteLaserLayer 가
+   로컬 stroke 까지 함께 SVG 로 그리는 방식으로 처리한다.
+   ================================================================ */
+
+/* ----------------------------------------------------------------
+   tldraw StylePanel 색상 swatch 정렬 보정.
+   기본 .tlui-button 은 min-width: 40px 인데 panel 폭이 148px 라서
+   4×40 = 160px > 148px 로 grid 가 오른쪽으로 overflow 되어 잘림
+   → 시각적으로 왼쪽으로 쏠려 보이는 현상.
+   grid 컬럼 폭과 buttons 의 min-width 를 함께 제한해 가운데 정렬을 강제.
+   selector 를 `> *` 로 잡아 실제 toggle item / button 어떤 형태로
+   렌더되더라도 매칭. 기존 .tlui-button { min-width: 40px } 우선순위
+   덮어쓰기 위해 !important.
+   ---------------------------------------------------------------- */
+.tlui-style-panel .tlui-grid {
+  grid-template-columns: repeat(4, 32px) !important;
+  justify-content: center !important;
+  padding: 4px 0 !important;
+}
+.tlui-style-panel .tlui-grid > * {
+  min-width: 32px !important;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+

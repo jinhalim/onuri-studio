@@ -46,7 +46,9 @@ export async function getChannelWithStories(channelId: string): Promise<ChannelW
   // 3) stories
   const { data: storiesRaw, error: storiesError } = await supabase
     .from('stories')
-    .select('id, channel_id, title, title_updated_at, created_at, thumbnail_url, external_links')
+    .select(
+      'id, channel_id, title, title_updated_at, snapshot_updated_at, created_at, thumbnail_url, external_links',
+    )
     .eq('channel_id', channelId)
     .order('created_at', { ascending: true });
 
@@ -68,6 +70,7 @@ export async function getChannelWithStories(channelId: string): Promise<ChannelW
       channelId: s.channel_id,
       title: s.title,
       titleUpdatedAt: s.title_updated_at,
+      snapshotUpdatedAt: s.snapshot_updated_at,
       createdAt: s.created_at,
       thumbnailUrl: s.thumbnail_url,
       externalLinks: (s.external_links as ExternalLinks) ?? {},

@@ -39,6 +39,10 @@ export function useChannelPresence({
   const [presences, setPresences] = useState<ChannelPresence[]>([]);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const stateRef = useRef<ChannelPresence | null>(null);
+  const retryCountRef = useRef(0);
+  const MAX_RETRIES = 10;
+  // useStoryRealtime 과 동일: useEffect 재실행으로 새 channel 인스턴스 생성
+  const [retryTick, setRetryTick] = useState(0);
 
   // 본인 presence를 currentStoryId / isDrawing 변화 시 갱신.
   useEffect(() => {
@@ -88,18 +92,36 @@ export function useChannelPresence({
 
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
+    const scheduleRetry = (delayMs: number, reason: string) => {
+      if (cancelled) return;
+      if (retryCountRef.current >= MAX_RETRIES) {
+        console.error(`[useChannelPresence] 최대 재시도 ${MAX_RETRIES}회 초과 — 중단`);
+        return;
+      }
+      const wait = delayMs * Math.pow(1.5, retryCountRef.current);
+      console.warn(
+        `[useChannelPresence] ${reason} → ${Math.round(wait)}ms 후 새 channel 으로 재구독 (시도 ${
+          retryCountRef.current + 1
+        }/${MAX_RETRIES})`,
+      );
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = setTimeout(() => {
+        if (cancelled) return;
+        retryCountRef.current += 1;
+        setRetryTick((t) => t + 1);
+      }, wait);
+    };
+
     channel.subscribe(async (status) => {
       if (cancelled) return;
       console.log('[useChannelPresence] status:', status);
       if (status === 'SUBSCRIBED' && stateRef.current) {
+        retryCountRef.current = 0;
         await channel.track(stateRef.current);
       } else if (status === 'CLOSED') {
-        if (retryTimer) clearTimeout(retryTimer);
-        retryTimer = setTimeout(() => {
-          if (cancelled) return;
-          console.log('[useChannelPresence] CLOSED 후 재구독 시도');
-          void channel.subscribe();
-        }, 1500);
+        scheduleRetry(1500, 'CLOSED 수신');
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        scheduleRetry(3000, `${status} 수신`);
       }
     });
 
@@ -111,8 +133,8 @@ export function useChannelPresence({
       channel.unsubscribe();
       channelRef.current = null;
     };
-    // channelId 또는 user.id 변경 시에만 재구독
-  }, [channelId, user]);
+    // retryTick 변화 시 새 channel 인스턴스 생성 (Supabase 제약 우회)
+  }, [channelId, user, retryTick]);
 
   return { presences };
 }

@@ -10,7 +10,9 @@ interface PresenceLayerProps {
 }
 
 // 다른 사용자의 커서를 캔버스 위에 절대 배치.
-// 페이지 좌표 → 화면 좌표 변환은 editor.pageToScreen 사용.
+// 페이지 좌표 → 캔버스 기준 좌표는 editor.pageToViewport 사용 (pageToScreen 은
+// screenBounds.x/y 가 더해진 "브라우저 페이지" 좌표라 absolute inset-0 오버레이에서
+// 헤더 높이만큼 어긋남).
 // 화면 좌표가 변하더라도 매번 리렌더 되도록 editor.store.listen(scope: 'session') 으로
 // 캠퍼스 카메라 변화에 따라가야 하지만, MVP 에서는 transition 으로 부드럽게 처리.
 
@@ -30,7 +32,7 @@ export function PresenceLayer({ presences, editor, currentUserId }: PresenceLaye
 
 function RemoteCursor({ presence, editor }: { presence: PresenceState; editor: Editor }) {
   if (!presence.cursor) return null;
-  const screen = editor.pageToScreen(presence.cursor);
+  const screen = editor.pageToViewport(presence.cursor);
 
   return (
     <div

@@ -44,9 +44,9 @@ function SubmitButton() {
       aria-label="스토리 삭제"
       disabled={pending}
       className={cn(
-        'flex h-8 w-8 items-center justify-center rounded-sm',
-        'bg-brand-bezel/80 text-fg-muted backdrop-blur-sm',
-        'transition-colors hover:bg-rec hover:text-fg',
+        'flex h-7 w-7 items-center justify-center rounded-sm',
+        'border border-divider text-fg-muted',
+        'transition-colors hover:border-rec hover:bg-rec hover:text-fg',
         'disabled:opacity-60',
       )}
     >

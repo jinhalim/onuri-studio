@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { saveStorySnapshot } from '@/lib/usecases/save-story-snapshot';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { idSchema } from '@/lib/security/validators';
@@ -29,12 +30,14 @@ export async function saveStorySnapshotAction(
     return { ok: false, error: `스냅샷이 너무 커요 (${snapshotJson.length} bytes > ${SIZE_LIMIT})` };
   }
 
+  let channelId: string;
   try {
-    await saveStorySnapshot({
+    const result = await saveStorySnapshot({
       storyId: parsedId.data,
       snapshotJson,
       userId: user.id,
     });
+    channelId = result.channelId;
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'UNKNOWN';
     console.error('[saveStorySnapshotAction] 실패:', err);
@@ -43,6 +46,11 @@ export async function saveStorySnapshotAction(
     }
     return { ok: false, error: '저장 중 오류가 발생했어요' };
   }
+
+  // 채널 페이지의 "마지막 수정" 표시가 최신 snapshot_updated_at 을 반영하도록
+  // Router Cache + Full Route Cache 무효화. revalidatePath 는 next.js 14+ 에서
+  // 양쪽 캐시 모두 invalidate.
+  revalidatePath(`/ch/${channelId}`);
 
   return { ok: true, savedAt: new Date().toISOString() };
 }

@@ -29,17 +29,33 @@ export interface SyncPayload {
   removed?: string[];
 }
 
+// 레이저 포인터 broadcast 페이로드.
+// 한 stroke = pointer down ~ up 까지의 일련의 점.
+// receiver 가 strokeId 로 점 누적, phase='end' 후 ~1.5초 페이드.
+export interface LaserPayload {
+  fromUserId: string;
+  color: string;
+  strokeId: string;
+  x: number;
+  y: number;
+  phase: 'start' | 'move' | 'end';
+}
+
 export interface UseStoryRealtimeOptions {
   storyId: string;
   user: User;
   /** 원격에서 도착한 sync 이벤트 처리. 호출 측이 mergeRemoteChanges 로 적용. */
   onSync: (payload: SyncPayload) => void;
+  /** 원격 레이저 포인터 페이로드 처리. */
+  onLaser?: (payload: LaserPayload) => void;
 }
 
 export interface UseStoryRealtimeResult {
   presences: PresenceState[];
   /** 본인 변경을 다른 사용자에게 broadcast. */
   broadcast: (changes: Omit<SyncPayload, 'fromUserId'>) => void;
+  /** 본인 레이저 포인터 점 broadcast (공유 모드일 때만 호출 권장). */
+  broadcastLaser: (point: Omit<LaserPayload, 'fromUserId' | 'color'>) => void;
   /** 본인 presence (커서/그리는 중) 갱신. */
   updatePresence: (partial: Partial<Omit<PresenceState, 'userId' | 'nickname' | 'color'>>) => void;
   /** 채널 연결 상태. UI 디버깅용. */
@@ -50,6 +66,7 @@ export function useStoryRealtime({
   storyId,
   user,
   onSync,
+  onLaser,
 }: UseStoryRealtimeOptions): UseStoryRealtimeResult {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const presenceRef = useRef<PresenceState>({
@@ -60,13 +77,23 @@ export function useStoryRealtime({
     isDrawing: false,
   });
   const onSyncRef = useRef(onSync);
+  const onLaserRef = useRef(onLaser);
+  const retryCountRef = useRef(0);
+  const MAX_RETRIES = 10;
   const [presences, setPresences] = useState<PresenceState[]>([]);
   const [status, setStatus] = useState<UseStoryRealtimeResult['status']>('connecting');
+  // useEffect 를 강제로 재실행시켜 새 channel 인스턴스를 만들기 위한 카운터.
+  // Supabase Realtime 은 같은 channel 에 subscribe() 를 두 번 호출 못함 →
+  // CLOSED/오류 시 본 카운터를 증가시켜 effect 가 새 channel 을 만들게 함.
+  const [retryTick, setRetryTick] = useState(0);
 
-  // onSync 콜백을 ref로 보관해서 effect 의존성에서 제외 (재구독 방지)
+  // 콜백을 ref로 보관해서 effect 의존성에서 제외 (재구독 방지)
   useEffect(() => {
     onSyncRef.current = onSync;
   }, [onSync]);
+  useEffect(() => {
+    onLaserRef.current = onLaser;
+  }, [onLaser]);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +128,12 @@ export function useStoryRealtime({
           removed: p.removed?.length ?? 0,
         });
         onSyncRef.current(p);
+      })
+      .on('broadcast', { event: 'laser' }, ({ payload }) => {
+        if (!payload || typeof payload !== 'object') return;
+        const p = payload as LaserPayload;
+        if (p.fromUserId === user.id) return;
+        onLaserRef.current?.(p);
       })
       // 시스템 이벤트(연결/끊김/오류) 가시화 — 디버깅용
       .on('system', {}, (payload: unknown) => {
@@ -138,38 +171,45 @@ export function useStoryRealtime({
 
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
+    const scheduleRetry = (delayMs: number, reason: string) => {
+      if (cancelled) return;
+      if (retryCountRef.current >= MAX_RETRIES) {
+        console.error(
+          `[useStoryRealtime] 최대 재시도 ${MAX_RETRIES}회 초과 — 자동 재구독 중단 (사용자가 새로고침 필요)`,
+        );
+        return;
+      }
+      const wait = delayMs * Math.pow(1.5, retryCountRef.current); // exponential backoff
+      console.warn(
+        `[useStoryRealtime] ${reason} → ${Math.round(wait)}ms 후 새 channel 으로 재구독 (시도 ${
+          retryCountRef.current + 1
+        }/${MAX_RETRIES})`,
+      );
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = setTimeout(() => {
+        if (cancelled) return;
+        retryCountRef.current += 1;
+        // useEffect 를 재실행시켜 새 channel 을 만든다 (subscribe 두 번 호출 금지)
+        setRetryTick((t) => t + 1);
+      }, wait);
+    };
+
     channel.subscribe(async (subscribeStatus, err) => {
       if (cancelled) return;
       console.log('[useStoryRealtime] subscribe status:', subscribeStatus, err ?? '');
       if (subscribeStatus === 'SUBSCRIBED') {
+        retryCountRef.current = 0; // 성공 시 카운터 리셋
         setStatus('connected');
         const trackResult = await channel.track(presenceRef.current);
         console.log('[useStoryRealtime] track 결과:', trackResult);
       } else if (subscribeStatus === 'CLOSED') {
-        // cleanup 으로 닫힌 게 아니라면 재구독 시도
         if (!cancelled) {
-          console.warn('[useStoryRealtime] CLOSED 수신, 1.5초 후 재구독');
           setStatus('closed');
-          if (retryTimer) clearTimeout(retryTimer);
-          retryTimer = setTimeout(() => {
-            if (cancelled) return;
-            console.log('[useStoryRealtime] 재구독 시도');
-            setStatus('connecting');
-            void channel.subscribe();
-          }, 1500);
+          scheduleRetry(1500, 'CLOSED 수신');
         }
       } else if (subscribeStatus === 'CHANNEL_ERROR' || subscribeStatus === 'TIMED_OUT') {
         setStatus('error');
-        // CHANNEL_ERROR / TIMED_OUT 도 재시도 (Supabase 클라이언트 자체 백오프 위에 보강)
-        if (!cancelled) {
-          if (retryTimer) clearTimeout(retryTimer);
-          retryTimer = setTimeout(() => {
-            if (cancelled) return;
-            console.log('[useStoryRealtime] 오류 후 재구독 시도');
-            setStatus('connecting');
-            void channel.subscribe();
-          }, 3000);
-        }
+        scheduleRetry(3000, `${subscribeStatus} 수신`);
       }
     });
 
@@ -181,7 +221,8 @@ export function useStoryRealtime({
       channel.unsubscribe();
       channelRef.current = null;
     };
-  }, [storyId, user.id, user.nickname, user.color]);
+    // retryTick 변화 시 새 channel 인스턴스 생성 (Supabase 제약 우회)
+  }, [storyId, user.id, user.nickname, user.color, retryTick]);
 
   const broadcast = useCallback(
     (changes: Omit<SyncPayload, 'fromUserId'>) => {
@@ -220,5 +261,38 @@ export function useStoryRealtime({
     [],
   );
 
-  return { presences, broadcast, updatePresence, status };
+  const broadcastLaser = useCallback(
+    (point: Omit<LaserPayload, 'fromUserId' | 'color'>) => {
+      const channel = channelRef.current;
+      if (!channel) return;
+      void channel.send({
+        type: 'broadcast',
+        event: 'laser',
+        payload: {
+          fromUserId: user.id,
+          color: user.color,
+          ...point,
+        } satisfies LaserPayload,
+      });
+    },
+    [user.id, user.color],
+  );
+
+  // Keep-alive: 20초마다 빈 broadcast 송신해서 idle timeout 방지.
+  // Supabase Realtime free tier 에서 idle 채널이 빠르게 닫히는 현상 완화.
+  useEffect(() => {
+    if (status !== 'connected') return;
+    const interval = window.setInterval(() => {
+      const channel = channelRef.current;
+      if (!channel) return;
+      void channel.send({
+        type: 'broadcast',
+        event: 'keepalive',
+        payload: { ts: Date.now() },
+      });
+    }, 20_000);
+    return () => window.clearInterval(interval);
+  }, [status]);
+
+  return { presences, broadcast, broadcastLaser, updatePresence, status };
 }

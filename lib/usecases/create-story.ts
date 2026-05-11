@@ -51,6 +51,7 @@ export async function createStory(input: CreateStoryInput): Promise<Story> {
         channelId: data.channel_id,
         title: data.title,
         titleUpdatedAt: data.title_updated_at,
+        snapshotUpdatedAt: null,
         createdAt: data.created_at,
         thumbnailUrl: data.thumbnail_url,
         externalLinks: data.external_links ?? {},

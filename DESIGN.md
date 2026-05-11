@@ -940,6 +940,7 @@ provider.destroy() + 마지막 스냅샷 flush
 | 2026-05-08 | D-008 | 관리자 권한 부여 | **MVP는 Supabase SQL 직접 변경, 사용자 증가 시 `/admin` promote UI 추가** | MVP 단순성 |
 | 2026-05-08 | D-009 | Yjs 스냅샷 보존 정책 | **일별 1개 + 직전 5개 롤링** | 500MB 무료 티어 안전 + 즉시 롤백 + 장기 백업 균형 |
 | 2026-05-08 | D-010 | Realtime 드라이버 (O-008 해결) | **Supabase Realtime broadcast + presence** (tldraw store diff, last-write-wins) | 별도 WebSocket 인프라 불필요. Yjs CRDT는 후속 마이그레이션으로 점진 전환 가능 (같은 채널에 메시지 타입 추가). MVP 동시 편집 충돌은 last-write-wins 으로 수용. |
+| 2026-05-11 | D-011 | 캔버스 색상 — **전체 도형 임의 색** | tldraw `shape.meta.customColor` 에 hex 저장, 각 ShapeUtil `.configure({ getCustomDisplayValues })` 로 렌더 override. 커스텀 StylePanel 에 HTML color picker section 추가. 구현 메모 [§ 17.5](#175-d-011-임의-색상-지원-구현-메모). | tldraw v5 의 `colorStyle` enum 제약을 schema 변경 없이 우회. 기본 팔레트 + 임의 색 병행. sticky note 작은 화면 hit-box 버그 회피로 함께 해결. |
 
 ### 17.2 D-007 색상 충돌 회피 알고리즘 상세
 
@@ -970,6 +971,36 @@ const PALETTE = [
   - `kind='rolling'`은 최대 5개, 6번째 추가 시 가장 오래된 것 삭제
   - `kind='daily'`은 매일 자정 cron으로 1개 추가, 무기한 보존(또는 90일 후 정리는 추후 결정)
 - 복구 UI는 Phase 5 마이페이지에서 추가 (선택사항).
+
+### 17.5 D-011 임의 색상 지원 구현 메모
+
+**문제**: tldraw v5 의 color style 은 `'black' | 'grey' | 'light-violet' | …` enum (`TLDefaultColorStyle`) 으로 schema 에 박혀 있어 임의 hex 를 `shape.props.color` 에 넣을 수 없음. 그러나 사용자 요구는 sticky note·도형·펜·화살표 등 **전체 도형에 임의 색**.
+
+**해법** — 두 축으로 분리:
+
+1. **저장**: `shape.meta.customColor` 에 hex 문자열 저장. `meta` 는 자유로운 JsonObject 라 schema 변경 불필요.
+2. **렌더**: 각 기본 ShapeUtil 을 `.configure({ getCustomDisplayValues })` 로 확장. `getDisplayValues` 가 default + custom 을 spread 머지하므로 (`shapes/shared/getDisplayValues.js`), custom 에서 `strokeColor` / `fillColor` / `noteBackgroundColor` 등 키만 반환하면 부분 override.
+
+```ts
+// components/canvas/customShapeUtils.ts
+const CustomNoteShapeUtil = NoteShapeUtil.configure({
+  getCustomDisplayValues: (_editor, shape) => {
+    const hex = getCustomColor(shape);
+    if (!hex) return {};
+    return {
+      noteBackgroundColor: hex,
+      borderColor: hexWithAlpha(hex, 0.6),
+      labelColor: labelOnHex(hex),  // sRGB 휘도로 검정/흰색 자동
+    };
+  },
+});
+```
+
+**UI**: `<Tldraw components={{ StylePanel: CustomStylePanel }}>` 로 교체. `CustomStylePanel` 은 `<DefaultStylePanel>` 안에 `<DefaultStylePanelContent />` (기존 팔레트 유지) + HTML `<input type="color">` section 추가.
+
+**Realtime 호환**: 사용자가 picker 로 색을 적용하면 `editor.updateShapes({ id, type, meta })` 가 호출되고, store 의 user-source 변경은 D-010 broadcast 메커니즘으로 자동 전파 → 다른 사용자도 같은 hex 색으로 렌더.
+
+**부수 효과**: 작은 화면에서 일부 팔레트 swatch 클릭이 잘 안되는 hit-box 이슈는 globals.css 에 `min-width/min-height: 24px` 추가로 보완 + 임의 색 picker 가 우회로 제공.
 
 ### 17.4 미해결 결정 (사용자 검토 대기)
 

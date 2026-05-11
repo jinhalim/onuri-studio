@@ -87,30 +87,39 @@ export function StoryCard({ story, channelId, canEdit, livePresences = [] }: Sto
         )}
       </Link>
 
-      <div className="flex flex-col gap-1 px-4 py-3">
-        <Link
-          href={`/ch/${channelId}/story/${story.id}`}
-          className="line-clamp-1 text-sm font-medium text-fg hover:text-live"
-        >
-          {story.title}
-        </Link>
-        <span className="text-xs text-fg-muted">
-          마지막 수정: {formatRelative(story.titleUpdatedAt)}
-        </span>
-      </div>
-
-      {canEdit && (
-        <div
-          className={cn(
-            'absolute right-2 top-2 opacity-0 transition-opacity',
-            'group-hover:opacity-100 focus-within:opacity-100',
-          )}
-        >
-          <DeleteStoryButton storyId={story.id} channelId={channelId} />
+      <div className="flex items-start justify-between gap-2 px-4 py-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <Link
+            href={`/ch/${channelId}/story/${story.id}`}
+            className="line-clamp-1 text-sm font-medium text-fg hover:text-live"
+          >
+            {story.title}
+          </Link>
+          <span className="text-xs text-fg-muted">
+            마지막 수정: {formatRelative(latestModifiedAt(story.titleUpdatedAt, story.snapshotUpdatedAt))}
+          </span>
         </div>
-      )}
+
+        {/* 삭제 버튼: hover 시만 노출 (아바타와 겹치지 않게 정보 영역으로 이동) */}
+        {canEdit && (
+          <div
+            className={cn(
+              'shrink-0 opacity-0 transition-opacity',
+              'group-hover:opacity-100 focus-within:opacity-100',
+            )}
+          >
+            <DeleteStoryButton storyId={story.id} channelId={channelId} />
+          </div>
+        )}
+      </div>
     </article>
   );
+}
+
+// 제목 변경 시각과 화이트보드 저장 시각 중 더 최근 것.
+function latestModifiedAt(titleAt: string, snapshotAt: string | null): string {
+  if (!snapshotAt) return titleAt;
+  return new Date(snapshotAt).getTime() > new Date(titleAt).getTime() ? snapshotAt : titleAt;
 }
 
 function formatRelative(iso: string): string {
