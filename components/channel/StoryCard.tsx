@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Story } from '@/lib/domain/story';
+import type { ChannelPresence } from '@/lib/hooks/useChannelPresence';
 import { cn } from '@/lib/utils';
 import { DeleteStoryButton } from './DeleteStoryButton';
 
@@ -8,20 +9,30 @@ interface StoryCardProps {
   channelId: string;
   /** 현재 사용자가 채널 소유자인지. true면 삭제 버튼 노출. */
   canEdit: boolean;
+  /** 이 스토리에 현재 접속 중인 사용자들 (자기 자신 포함 가능). */
+  livePresences?: ChannelPresence[];
 }
 
-export function StoryCard({ story, channelId, canEdit }: StoryCardProps) {
+export function StoryCard({ story, channelId, canEdit, livePresences = [] }: StoryCardProps) {
+  const anyDrawing = livePresences.some((p) => p.isDrawing);
+  const liveCount = livePresences.length;
+
   return (
     <article
       className={cn(
         'group relative flex flex-col overflow-hidden rounded-md',
-        'border border-divider bg-brand-surface transition-colors',
-        'hover:border-live/50',
+        'border bg-brand-surface transition-colors',
+        // 라이브 상태에 따라 테두리 색 변경 (D-010 ON AIR 확장)
+        anyDrawing
+          ? 'border-rec/60'
+          : liveCount > 0
+            ? 'border-live/60'
+            : 'border-divider hover:border-live/50',
       )}
     >
       <Link
         href={`/ch/${channelId}/story/${story.id}`}
-        className="flex aspect-video items-center justify-center bg-brand-screen"
+        className="relative flex aspect-video items-center justify-center bg-brand-screen"
       >
         {story.thumbnailUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -32,6 +43,47 @@ export function StoryCard({ story, channelId, canEdit }: StoryCardProps) {
           />
         ) : (
           <span className="text-xs text-fg-muted">미리보기 없음</span>
+        )}
+
+        {/* 라이브 인디케이터: 좌상단 코너 */}
+        {liveCount > 0 && (
+          <div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-sm bg-brand-bezel/85 px-2 py-1 backdrop-blur-sm">
+            <span
+              aria-hidden
+              className={cn(
+                'h-1.5 w-1.5 rounded-full',
+                anyDrawing ? 'bg-rec animate-pulse-rec' : 'bg-live',
+              )}
+            />
+            <span
+              className={cn(
+                'text-[10px] font-semibold',
+                anyDrawing ? 'text-rec' : 'text-live',
+              )}
+            >
+              {anyDrawing ? 'ON AIR' : `${liveCount}명 접속`}
+            </span>
+          </div>
+        )}
+
+        {/* 접속자 아바타: 우상단 코너 */}
+        {liveCount > 0 && (
+          <div className="absolute right-2 top-2 flex -space-x-1.5">
+            {livePresences.slice(0, 3).map((p) => (
+              <span
+                key={p.userId}
+                title={p.nickname}
+                aria-label={p.nickname}
+                className="h-4 w-4 rounded-full ring-2 ring-brand-bezel"
+                style={{ backgroundColor: p.color }}
+              />
+            ))}
+            {liveCount > 3 && (
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-surface text-[9px] font-semibold text-fg-muted ring-2 ring-brand-bezel">
+                +{liveCount - 3}
+              </span>
+            )}
+          </div>
         )}
       </Link>
 

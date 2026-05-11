@@ -64,6 +64,7 @@ export default async function StoryPage({ params }: StoryPageProps) {
       <section className="flex-1 overflow-hidden">
         <StudioCanvas
           storyId={story.id}
+          channelId={channelId}
           initialSnapshotJson={initialSnapshotJson}
           canEdit={canEdit}
           user={user}

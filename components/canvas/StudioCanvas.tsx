@@ -10,8 +10,11 @@ import {
 import 'tldraw/tldraw.css';
 import { saveStorySnapshotAction } from '@/app/actions/save-story-snapshot';
 import { useStoryRealtime, type SyncPayload } from '@/lib/hooks/useStoryRealtime';
+import { useChannelPresence } from '@/lib/hooks/useChannelPresence';
 import { OnAirIndicator } from '@/components/brand/OnAirIndicator';
+import { PresenceList } from '@/components/presence/PresenceList';
 import { PresenceLayer } from './PresenceLayer';
+import { cn } from '@/lib/utils';
 import type { User } from '@/lib/domain/user';
 
 const AUTOSAVE_DEBOUNCE_MS = 5_000;
@@ -20,6 +23,7 @@ const DRAWING_RESET_MS = 800; // 마지막 변경 후 0.8초 동안 그리는 �
 
 interface StudioCanvasProps {
   storyId: string;
+  channelId: string;
   initialSnapshotJson: string | null;
   canEdit: boolean;
   /** 로그인한 사용자. 비로그인이면 null (이 경우 realtime 비활성). */
@@ -28,10 +32,17 @@ interface StudioCanvasProps {
 
 type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
 
-export function StudioCanvas({ storyId, initialSnapshotJson, canEdit, user }: StudioCanvasProps) {
+export function StudioCanvas({
+  storyId,
+  channelId,
+  initialSnapshotJson,
+  canEdit,
+  user,
+}: StudioCanvasProps) {
   const [status, setStatus] = useState<SaveStatus>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [isDrawingLocal, setIsDrawingLocal] = useState(false);
 
   const editorRef = useRef<Editor | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -41,7 +52,10 @@ export function StudioCanvas({ storyId, initialSnapshotJson, canEdit, user }: St
   // 원격 sync 적용 (loop 방지: mergeRemoteChanges 안에서 적용 → 'user' source 안 씀)
   const handleRemoteSync = useCallback((payload: SyncPayload) => {
     const ed = editorRef.current;
-    if (!ed) return;
+    if (!ed) {
+      console.warn('[StudioCanvas] handleRemoteSync: editor 미준비');
+      return;
+    }
     ed.store.mergeRemoteChanges(() => {
       try {
         if (payload.added && payload.added.length > 0) {
@@ -53,6 +67,7 @@ export function StudioCanvas({ storyId, initialSnapshotJson, canEdit, user }: St
         if (payload.removed && payload.removed.length > 0) {
           ed.store.remove(payload.removed as Parameters<typeof ed.store.remove>[0]);
         }
+        console.log('[StudioCanvas] 원격 변경 적용 완료');
       } catch (err) {
         console.error('[StudioCanvas] 원격 변경 적용 실패:', err);
       }
@@ -74,10 +89,18 @@ export function StudioCanvas({ storyId, initialSnapshotJson, canEdit, user }: St
     lastSeenAt: '',
   };
 
-  const { presences, broadcast, updatePresence } = useStoryRealtime({
+  const { presences, broadcast, updatePresence, status: realtimeStatus } = useStoryRealtime({
     storyId,
     user: realtimeUser,
     onSync: handleRemoteSync,
+  });
+
+  // Channel Guide 페이지에서 "이 스토리 사용 중" 표시를 위해 channel-level presence 도 트래킹
+  useChannelPresence({
+    channelId,
+    user,
+    currentStoryId: storyId,
+    isDrawing: isDrawingLocal,
   });
 
   // 다른 사용자가 그리는 중인지 (On Air)
@@ -123,13 +146,14 @@ export function StudioCanvas({ storyId, initialSnapshotJson, canEdit, user }: St
         broadcast({ added, updated, removed });
       }
 
-      // 2) On Air 표시
+      // 2) On Air 표시 (스토리 채널 + 채널 레벨 모두)
       updatePresence({ isDrawing: true });
+      setIsDrawingLocal(true);
       if (drawingResetRef.current) clearTimeout(drawingResetRef.current);
-      drawingResetRef.current = setTimeout(
-        () => updatePresence({ isDrawing: false }),
-        DRAWING_RESET_MS,
-      );
+      drawingResetRef.current = setTimeout(() => {
+        updatePresence({ isDrawing: false });
+        setIsDrawingLocal(false);
+      }, DRAWING_RESET_MS);
 
       // 3) 자동 저장 (소유자만)
       if (canEdit) {
@@ -203,6 +227,12 @@ export function StudioCanvas({ storyId, initialSnapshotJson, canEdit, user }: St
         currentUserId={realtimeUser.id}
       />
 
+      {/* 좌상단 presence + 연결 상태 */}
+      <div className="pointer-events-auto absolute left-4 top-4 z-50 flex flex-col items-start gap-2">
+        <PresenceList presences={presences} currentUserId={realtimeUser.id} />
+        <RealtimeStatusBadge status={realtimeStatus} />
+      </div>
+
       {/* 우상단 상태 영역 */}
       <div className="pointer-events-none absolute right-4 top-4 z-50 flex flex-col items-end gap-2">
         <OnAirIndicator active={someoneDrawing} />
@@ -261,6 +291,30 @@ function ReadOnlyBadge() {
   return (
     <div className="rounded-sm border border-divider bg-brand-bezel/80 px-3 py-1 text-xs text-fg-muted backdrop-blur-sm">
       읽기 전용 (방문자 모드)
+    </div>
+  );
+}
+
+function RealtimeStatusBadge({
+  status,
+}: {
+  status: 'connecting' | 'connected' | 'closed' | 'error';
+}) {
+  const config = {
+    connecting: { label: '연결 중…', color: 'text-fg-muted', dot: 'bg-fg-muted/40 animate-pulse' },
+    connected: { label: '실시간 연결됨', color: 'text-live', dot: 'bg-live' },
+    closed: { label: '연결 끊김', color: 'text-fg-muted', dot: 'bg-fg-muted/40' },
+    error: { label: '연결 오류', color: 'text-rec', dot: 'bg-rec animate-pulse-rec' },
+  }[status];
+
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-1.5 rounded-sm border border-divider bg-brand-bezel/80 px-2.5 py-1 backdrop-blur-sm',
+      )}
+    >
+      <span aria-hidden className={cn('h-1.5 w-1.5 rounded-full', config.dot)} />
+      <span className={cn('text-[10px] font-medium', config.color)}>{config.label}</span>
     </div>
   );
 }

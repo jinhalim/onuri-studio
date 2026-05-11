@@ -79,7 +79,10 @@ export function useStoryRealtime({
       return;
     }
 
-    const channel = supabase.channel(`story:${storyId}`, {
+    const topic = `story:${storyId}`;
+    console.log('[useStoryRealtime] 채널 구독 시작:', topic, '(user:', user.nickname, ')');
+
+    const channel = supabase.channel(topic, {
       config: {
         presence: { key: user.id },
         broadcast: { self: false }, // 자기 메시지는 받지 않음 (loop 방지)
@@ -91,19 +94,34 @@ export function useStoryRealtime({
         if (!payload || typeof payload !== 'object') return;
         const p = payload as SyncPayload;
         if (p.fromUserId === user.id) return; // 안전망 (broadcast.self=false 무시되는 경우 대비)
+        console.log('[useStoryRealtime] ← broadcast 수신:', {
+          from: p.fromUserId,
+          added: p.added?.length ?? 0,
+          updated: p.updated?.length ?? 0,
+          removed: p.removed?.length ?? 0,
+        });
         onSyncRef.current(p);
       })
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState<PresenceState>();
         const list = Object.values(state).flat();
+        console.log('[useStoryRealtime] presence sync:', list.length, '명 접속');
         if (!cancelled) setPresences(list);
+      })
+      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+        console.log('[useStoryRealtime] → join:', key, newPresences);
+      })
+      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+        console.log('[useStoryRealtime] ← leave:', key, leftPresences);
       });
 
-    channel.subscribe(async (subscribeStatus) => {
+    channel.subscribe(async (subscribeStatus, err) => {
       if (cancelled) return;
+      console.log('[useStoryRealtime] subscribe status:', subscribeStatus, err ?? '');
       if (subscribeStatus === 'SUBSCRIBED') {
         setStatus('connected');
-        await channel.track(presenceRef.current);
+        const trackResult = await channel.track(presenceRef.current);
+        console.log('[useStoryRealtime] track 결과:', trackResult);
       } else if (subscribeStatus === 'CLOSED') {
         setStatus('closed');
       } else if (subscribeStatus === 'CHANNEL_ERROR' || subscribeStatus === 'TIMED_OUT') {
@@ -123,12 +141,26 @@ export function useStoryRealtime({
   const broadcast = useCallback(
     (changes: Omit<SyncPayload, 'fromUserId'>) => {
       const channel = channelRef.current;
-      if (!channel) return;
-      channel.send({
-        type: 'broadcast',
-        event: 'sync',
-        payload: { fromUserId: user.id, ...changes } satisfies SyncPayload,
+      if (!channel) {
+        console.warn('[useStoryRealtime] broadcast 호출됐으나 channel null');
+        return;
+      }
+      console.log('[useStoryRealtime] → broadcast 송신:', {
+        added: changes.added?.length ?? 0,
+        updated: changes.updated?.length ?? 0,
+        removed: changes.removed?.length ?? 0,
       });
+      void channel
+        .send({
+          type: 'broadcast',
+          event: 'sync',
+          payload: { fromUserId: user.id, ...changes } satisfies SyncPayload,
+        })
+        .then((result) => {
+          if (result !== 'ok') {
+            console.warn('[useStoryRealtime] broadcast send 결과:', result);
+          }
+        });
     },
     [user.id],
   );

@@ -2,8 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Wordmark } from '@/components/brand/Wordmark';
 import { SignedInBanner } from '@/components/auth/SignedInBanner';
-import { StoryCard } from '@/components/channel/StoryCard';
-import { CreateStoryButton } from '@/components/channel/CreateStoryButton';
+import { ChannelStoriesSection } from '@/components/channel/ChannelStoriesSection';
 import { ShareButton } from '@/components/share/ShareButton';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { getChannelWithStories } from '@/lib/usecases/get-channel-with-stories';
@@ -59,27 +58,12 @@ export default async function ChannelGuidePage({ params }: ChannelGuidePageProps
         </div>
       </section>
 
-      <section>
-        <h2 className="mb-4 text-sm font-semibold text-fg-muted">
-          스토리 ({data.stories.length})
-        </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {data.stories.map((story) => (
-            <StoryCard
-              key={story.id}
-              story={story}
-              channelId={data.channel.id}
-              canEdit={canEdit}
-            />
-          ))}
-          {canEdit && <CreateStoryButton channelId={data.channel.id} />}
-        </div>
-        {!canEdit && data.stories.length === 0 && (
-          <p className="rounded-md border border-dashed border-divider bg-brand-surface/40 px-4 py-6 text-center text-sm text-fg-muted">
-            이 채널에는 아직 스토리가 없어요.
-          </p>
-        )}
-      </section>
+      <ChannelStoriesSection
+        stories={data.stories}
+        channelId={data.channel.id}
+        canEdit={canEdit}
+        user={user}
+      />
 
       <footer className="mt-auto pt-12 text-xs text-fg-muted/70">
         Phase 2 — Channel Guide / 화이트보드는 Phase 3부터 활성화
