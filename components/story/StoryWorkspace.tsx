@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import type { Editor, TLRecord } from 'tldraw';
@@ -18,6 +18,7 @@ import { PresenceList } from '@/components/presence/PresenceList';
 import { OnAirIndicator } from '@/components/brand/OnAirIndicator';
 import {
   useStoryRealtime,
+  type CursorPayload,
   type LaserPayload,
   type SyncPayload,
 } from '@/lib/hooks/useStoryRealtime';
@@ -122,6 +123,37 @@ export function StoryWorkspace({
     });
   }, []);
 
+  // 원격 커서 위치. cursor 는 presence.track 대신 broadcast 로 받아서 별도 Map 에 보관.
+  // (presence.track 은 Supabase 기본 rate limit ~100ms 라서 그리는 중 cursor 가 drop 됨)
+  const [remoteCursors, setRemoteCursors] = useState<
+    Map<string, { x: number; y: number; updatedAt: number }>
+  >(() => new Map());
+  const handleRemoteCursor = useCallback((payload: CursorPayload) => {
+    setRemoteCursors((prev) => {
+      const next = new Map(prev);
+      next.set(payload.fromUserId, { x: payload.x, y: payload.y, updatedAt: Date.now() });
+      return next;
+    });
+  }, []);
+  // 30초 이상 cursor update 없으면 제거 (사용자 이탈)
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setRemoteCursors((prev) => {
+        const now = Date.now();
+        let changed = false;
+        const next = new Map(prev);
+        for (const [id, c] of prev) {
+          if (now - c.updatedAt > 30_000) {
+            next.delete(id);
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, 5_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   // 원격 레이저 stroke 누적. 'end' 미수신 stuck stroke 도 청소되도록 lastUpdatedAt 기록.
   const handleRemoteLaser = useCallback((payload: LaserPayload) => {
     setRemoteLaserStrokes((prev) => {
@@ -174,12 +206,29 @@ export function StoryWorkspace({
     return () => window.clearInterval(interval);
   }, []);
 
-  const { presences, broadcast, broadcastLaser, updatePresence, status } = useStoryRealtime({
+  const {
+    presences: rawPresences,
+    broadcast,
+    broadcastLaser,
+    broadcastCursor,
+    updatePresence,
+    status,
+  } = useStoryRealtime({
     storyId: story.id,
     user: realtimeUser,
     onSync: handleRemoteSync,
     onLaser: handleRemoteLaser,
+    onCursor: handleRemoteCursor,
   });
+
+  // remoteCursors 를 presence 와 머지해서 PresenceLayer 가 쓸 형태로 변환.
+  // presence 는 닉네임/색상/그리는 중 등 메타, cursor 는 별도 broadcast 라 따로 관리.
+  const presences = useMemo(() => {
+    return rawPresences.map((p) => {
+      const c = remoteCursors.get(p.userId);
+      return c ? { ...p, cursor: { x: c.x, y: c.y } } : p;
+    });
+  }, [rawPresences, remoteCursors]);
 
   // status 디바운스: 일시적 끊김(< 3초)은 사용자에게 안 보이게.
   // 'connected' 는 즉시 반영, 그 외 상태는 3초 유지된 후에만 표시.
@@ -250,6 +299,7 @@ export function StoryWorkspace({
           currentUserNickname={realtimeUser.nickname}
           broadcast={broadcast}
           broadcastLaser={broadcastLaser}
+          broadcastCursor={broadcastCursor}
           updatePresence={updatePresence}
           onEditorMount={(ed) => {
             editorRef.current = ed;

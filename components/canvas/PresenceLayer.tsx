@@ -34,11 +34,17 @@ function RemoteCursor({ presence, editor }: { presence: PresenceState; editor: E
   if (!presence.cursor) return null;
   const screen = editor.pageToViewport(presence.cursor);
 
+  // transition duration 을 cursor broadcast 간격(30Hz≈33ms) + Supabase realtime
+  // latency(50~150ms) 합산보다 약간 길게 두면 packet 간 보간이 자연스러움.
+  // 너무 길면 사용자가 멈췄을 때도 한참 후에 멈춰 보임 → 180ms 절충.
+  // ease-linear: 일정 속도가 등속 이동에 더 부드러움 (ease-out 은 가속/감속 느낌).
   return (
     <div
-      className="absolute left-0 top-0 transition-transform duration-75 ease-out"
+      className="absolute left-0 top-0"
       style={{
         transform: `translate(${screen.x}px, ${screen.y}px)`,
+        transition: 'transform 180ms linear',
+        willChange: 'transform',
       }}
     >
       <CursorIcon color={presence.color} />

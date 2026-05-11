@@ -31,7 +31,12 @@ const tldrawComponents: TLComponents = {
   StylePanel: CustomStylePanel,
 };
 import { saveStorySnapshotAction } from '@/app/actions/save-story-snapshot';
-import type { LaserPayload, PresenceState, SyncPayload } from '@/lib/hooks/useStoryRealtime';
+import type {
+  CursorPayload,
+  LaserPayload,
+  PresenceState,
+  SyncPayload,
+} from '@/lib/hooks/useStoryRealtime';
 import type { LaserShareMode } from '@/components/story/LaserShareToggle';
 import { PresenceLayer } from './PresenceLayer';
 import { RemoteLaserLayer, type RemoteLaserStroke } from './RemoteLaserLayer';
@@ -65,6 +70,8 @@ interface StudioCanvasProps {
   currentUserNickname: string;
   broadcast: (changes: Omit<SyncPayload, 'fromUserId'>) => void;
   broadcastLaser: (point: Omit<LaserPayload, 'fromUserId' | 'color'>) => void;
+  /** pointer_move 마다 호출 (30Hz throttle). presence.track 대신 broadcast 로 cursor 전송. */
+  broadcastCursor: (point: Omit<CursorPayload, 'fromUserId'>) => void;
   updatePresence: (
     partial: Partial<Omit<PresenceState, 'userId' | 'nickname' | 'color'>>,
   ) => void;
@@ -103,6 +110,7 @@ export function StudioCanvas({
   currentUserNickname,
   broadcast,
   broadcastLaser,
+  broadcastCursor,
   updatePresence,
   onEditorMount,
   onLocalDrawingChange,
@@ -365,18 +373,19 @@ export function StudioCanvas({
         },
       );
 
-      // 포인터 이벤트: presence cursor + 레이저 broadcast
+      // 포인터 이벤트: cursor broadcast + 레이저 broadcast
       ed.on('event', (info) => {
         if (info.type !== 'pointer') return;
         const point = ed.inputs.currentPagePoint;
         const isLaserTool = ed.getCurrentToolId() === 'laser';
 
-        // 1) presence cursor 갱신 (30Hz 스로틀, 도구 무관)
+        // 1) cursor broadcast (30Hz 스로틀, 도구 무관). presence.track 대신 broadcast
+        // 사용 — presence 의 ~100ms rate limit 우회. 그리는 중에도 cursor 가 안 끊김.
         if (info.name === 'pointer_move') {
           const now = Date.now();
           if (now - cursorTimerRef.current >= CURSOR_THROTTLE_MS) {
             cursorTimerRef.current = now;
-            updatePresence({ cursor: { x: point.x, y: point.y } });
+            broadcastCursor({ x: point.x, y: point.y });
           }
         }
 
@@ -460,8 +469,8 @@ export function StudioCanvas({
       initialSnapshotJson,
       canEdit,
       handleStoreChange,
-      updatePresence,
       broadcastLaser,
+      broadcastCursor,
       onEditorMount,
       currentUserId,
       flushPendingSave,

@@ -41,6 +41,15 @@ export interface LaserPayload {
   phase: 'start' | 'move' | 'end';
 }
 
+// 커서 위치 broadcast 페이로드.
+// presence.track 으로 보내면 Supabase 의 ~100ms 기본 rate limit 에 걸려 silent drop.
+// broadcast 는 별도 채널이라 훨씬 관대 → 30Hz cursor 송신해도 안전.
+export interface CursorPayload {
+  fromUserId: string;
+  x: number;
+  y: number;
+}
+
 export interface UseStoryRealtimeOptions {
   storyId: string;
   user: User;
@@ -48,6 +57,8 @@ export interface UseStoryRealtimeOptions {
   onSync: (payload: SyncPayload) => void;
   /** 원격 레이저 포인터 페이로드 처리. */
   onLaser?: (payload: LaserPayload) => void;
+  /** 원격 커서 위치 페이로드 처리. */
+  onCursor?: (payload: CursorPayload) => void;
 }
 
 export interface UseStoryRealtimeResult {
@@ -56,7 +67,9 @@ export interface UseStoryRealtimeResult {
   broadcast: (changes: Omit<SyncPayload, 'fromUserId'>) => void;
   /** 본인 레이저 포인터 점 broadcast (공유 모드일 때만 호출 권장). */
   broadcastLaser: (point: Omit<LaserPayload, 'fromUserId' | 'color'>) => void;
-  /** 본인 presence (커서/그리는 중) 갱신. */
+  /** 본인 커서 위치 broadcast (pointer_move 시). */
+  broadcastCursor: (point: Omit<CursorPayload, 'fromUserId'>) => void;
+  /** 본인 presence (그리는 중 상태 등) 갱신. cursor 는 broadcastCursor 사용. */
   updatePresence: (partial: Partial<Omit<PresenceState, 'userId' | 'nickname' | 'color'>>) => void;
   /** 채널 연결 상태. UI 디버깅용. */
   status: 'connecting' | 'connected' | 'closed' | 'error';
@@ -67,6 +80,7 @@ export function useStoryRealtime({
   user,
   onSync,
   onLaser,
+  onCursor,
 }: UseStoryRealtimeOptions): UseStoryRealtimeResult {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const presenceRef = useRef<PresenceState>({
@@ -78,6 +92,7 @@ export function useStoryRealtime({
   });
   const onSyncRef = useRef(onSync);
   const onLaserRef = useRef(onLaser);
+  const onCursorRef = useRef(onCursor);
   const retryCountRef = useRef(0);
   const MAX_RETRIES = 10;
   const [presences, setPresences] = useState<PresenceState[]>([]);
@@ -94,6 +109,9 @@ export function useStoryRealtime({
   useEffect(() => {
     onLaserRef.current = onLaser;
   }, [onLaser]);
+  useEffect(() => {
+    onCursorRef.current = onCursor;
+  }, [onCursor]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +152,12 @@ export function useStoryRealtime({
         const p = payload as LaserPayload;
         if (p.fromUserId === user.id) return;
         onLaserRef.current?.(p);
+      })
+      .on('broadcast', { event: 'cursor' }, ({ payload }) => {
+        if (!payload || typeof payload !== 'object') return;
+        const p = payload as CursorPayload;
+        if (p.fromUserId === user.id) return;
+        onCursorRef.current?.(p);
       })
       // 시스템 이벤트(연결/끊김/오류) 가시화 — 디버깅용
       .on('system', {}, (payload: unknown) => {
@@ -278,6 +302,19 @@ export function useStoryRealtime({
     [user.id, user.color],
   );
 
+  const broadcastCursor = useCallback(
+    (point: Omit<CursorPayload, 'fromUserId'>) => {
+      const channel = channelRef.current;
+      if (!channel) return;
+      void channel.send({
+        type: 'broadcast',
+        event: 'cursor',
+        payload: { fromUserId: user.id, ...point } satisfies CursorPayload,
+      });
+    },
+    [user.id],
+  );
+
   // Keep-alive: 20초마다 빈 broadcast 송신해서 idle timeout 방지.
   // Supabase Realtime free tier 에서 idle 채널이 빠르게 닫히는 현상 완화.
   useEffect(() => {
@@ -294,5 +331,5 @@ export function useStoryRealtime({
     return () => window.clearInterval(interval);
   }, [status]);
 
-  return { presences, broadcast, broadcastLaser, updatePresence, status };
+  return { presences, broadcast, broadcastLaser, broadcastCursor, updatePresence, status };
 }

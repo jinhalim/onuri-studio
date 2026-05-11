@@ -16,19 +16,22 @@ interface ChannelGuidePageProps {
 export default async function ChannelGuidePage({ params }: ChannelGuidePageProps) {
   const channelId = params.channelId;
 
-  const data = await getChannelWithStories(channelId);
+  // 독립 fetch 병렬화
+  const [data, user] = await Promise.all([
+    getChannelWithStories(channelId),
+    getCurrentUser(),
+  ]);
   if (!data) notFound();
 
-  const user = await getCurrentUser();
   const canEdit = user?.id === data.channel.ownerId;
 
-  // 참여 기록 (조용히 실패) — 로그인한 사용자에 한해
+  // 참여 기록은 UI 에 직접 영향 없음 → fire-and-forget
   if (user) {
-    await recordParticipation({
+    void recordParticipation({
       userId: user.id,
       channelId: data.channel.id,
       storyId: null,
-    });
+    }).catch((err) => console.error('[ChannelGuidePage] recordParticipation 실패:', err));
   }
 
   const shareUrl = urls.channel(data.channel.id);

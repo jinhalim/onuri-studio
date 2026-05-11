@@ -13,23 +13,30 @@ interface StoryPageProps {
 export default async function StoryPage({ params }: StoryPageProps) {
   const { channelId, storyId } = params;
 
-  const channelData = await getChannelWithStories(channelId);
+  // 페이지 진입 latency 단축: 독립적인 fetch 들을 병렬 실행.
+  // 이전: 순차 ~400ms (channel → user → snapshot). 현재: 가장 느린 단일 쿼리만큼.
+  const [channelData, user, initialSnapshotJson] = await Promise.all([
+    getChannelWithStories(channelId),
+    getCurrentUser(),
+    loadStorySnapshot(storyId),
+  ]);
+
   if (!channelData) notFound();
   const story = channelData.stories.find((s) => s.id === storyId);
   if (!story) notFound();
 
-  const user = await getCurrentUser();
   const canEdit = user?.id === channelData.channel.ownerId;
 
+  // 참여 기록은 페이지 렌더와 무관 (UI 에 안 보임) → fire-and-forget 으로 진입 차단 X.
+  // 에러는 콘솔에만 남기고 페이지는 정상 렌더.
   if (user) {
-    await recordParticipation({
+    void recordParticipation({
       userId: user.id,
       channelId: channelData.channel.id,
       storyId: story.id,
-    });
+    }).catch((err) => console.error('[StoryPage] recordParticipation 실패:', err));
   }
 
-  const initialSnapshotJson = await loadStorySnapshot(story.id);
   const shareUrl = urls.story(channelId, storyId);
 
   return (

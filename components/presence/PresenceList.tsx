@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { PresenceState } from '@/lib/hooks/useStoryRealtime';
 import { cn } from '@/lib/utils';
 
@@ -69,15 +70,40 @@ export function PresenceList({
 }
 
 function Avatar({ presence, isSelf }: { presence: PresenceState; isSelf: boolean }) {
+  // 자체 hover state — native title 의 0.5~1초 OS 지연을 없애고 즉시 표시.
+  const [hover, setHover] = useState(false);
+  const label = `${presence.nickname}${isSelf ? ' (나)' : ''}`;
   return (
     <span
-      title={`${presence.nickname}${isSelf ? ' (나)' : ''}${presence.isDrawing ? ' · 그리는 중' : ''}`}
-      aria-label={presence.nickname}
-      className={cn(
-        'inline-block h-5 w-5 rounded-full ring-2 ring-brand-bezel transition-transform',
-        presence.isDrawing && 'ring-rec animate-pulse-rec',
+      className="relative inline-block"
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+      onFocus={() => setHover(true)}
+      onBlur={() => setHover(false)}
+      tabIndex={0}
+    >
+      <span
+        aria-label={presence.nickname}
+        className={cn(
+          'inline-block h-5 w-5 rounded-full ring-2 ring-brand-bezel transition-transform',
+          presence.isDrawing && 'ring-rec animate-pulse-rec',
+          hover && 'scale-110',
+        )}
+        style={{ backgroundColor: presence.color }}
+      />
+      {hover && (
+        <span
+          role="tooltip"
+          className={cn(
+            'pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2',
+            'whitespace-nowrap rounded-sm border border-divider bg-brand-bezel px-2 py-1',
+            'text-[11px] font-medium text-fg shadow-lg',
+          )}
+        >
+          <span style={{ color: presence.color }}>●</span> {label}
+          {presence.isDrawing && <span className="ml-1 text-rec">· 그리는 중</span>}
+        </span>
       )}
-      style={{ backgroundColor: presence.color }}
-    />
+    </span>
   );
 }
