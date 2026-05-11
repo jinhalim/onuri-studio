@@ -13,6 +13,7 @@ import {
   type SaveState,
   type SaveControls,
 } from '@/components/canvas/StudioCanvas';
+import { loadStorySnapshotAction } from '@/app/actions/load-story-snapshot';
 import type { RemoteLaserStroke } from '@/components/canvas/RemoteLaserLayer';
 import { PresenceList } from '@/components/presence/PresenceList';
 import { OnAirIndicator } from '@/components/brand/OnAirIndicator';
@@ -135,6 +136,34 @@ export function StoryWorkspace({
       return next;
     });
   }, []);
+  // B5: 사용자가 채널을 떠나면 cursor 도 즉시 정리 (30초 timeout 기다리지 않음)
+  const handlePresenceLeave = useCallback((userId: string) => {
+    setRemoteCursors((prev) => {
+      if (!prev.has(userId)) return prev;
+      const next = new Map(prev);
+      next.delete(userId);
+      return next;
+    });
+  }, []);
+
+  // B6: 재연결 시 서버의 최신 snapshot 으로 editor store 를 다시 채움.
+  // CLOSED ↔ SUBSCRIBED 사이의 broadcast 들을 놓쳤을 수 있으므로 복원 필수.
+  // mergeRemoteChanges 안에서 적용 → handleStoreChange 가 'remote' source 로 무시.
+  const handleReconnect = useCallback(async () => {
+    const ed = editorRef.current;
+    if (!ed) return;
+    try {
+      const result = await loadStorySnapshotAction(story.id);
+      if (!result.ok || !result.snapshotJson) return;
+      const parsed = JSON.parse(result.snapshotJson) as Record<string, unknown>;
+      ed.store.mergeRemoteChanges(() => {
+        ed.loadSnapshot(parsed as Parameters<typeof ed.loadSnapshot>[0]);
+      });
+      console.log('[StoryWorkspace] 재연결 후 snapshot 재로드 완료');
+    } catch (err) {
+      console.error('[StoryWorkspace] 재연결 snapshot 재로드 실패:', err);
+    }
+  }, [story.id]);
   // 30초 이상 cursor update 없으면 제거 (사용자 이탈)
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -219,6 +248,8 @@ export function StoryWorkspace({
     onSync: handleRemoteSync,
     onLaser: handleRemoteLaser,
     onCursor: handleRemoteCursor,
+    onPresenceLeave: handlePresenceLeave,
+    onReconnect: handleReconnect,
   });
 
   // remoteCursors 를 presence 와 머지해서 PresenceLayer 가 쓸 형태로 변환.

@@ -59,6 +59,10 @@ export interface UseStoryRealtimeOptions {
   onLaser?: (payload: LaserPayload) => void;
   /** 원격 커서 위치 페이로드 처리. */
   onCursor?: (payload: CursorPayload) => void;
+  /** 사용자가 채널을 떠났을 때 호출. cursor/laser 같은 보조 state 정리용. */
+  onPresenceLeave?: (userId: string) => void;
+  /** 채널 재연결 (CLOSED → SUBSCRIBED) 시 호출. missing broadcast 회복용. */
+  onReconnect?: () => void;
 }
 
 export interface UseStoryRealtimeResult {
@@ -81,6 +85,8 @@ export function useStoryRealtime({
   onSync,
   onLaser,
   onCursor,
+  onPresenceLeave,
+  onReconnect,
 }: UseStoryRealtimeOptions): UseStoryRealtimeResult {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const presenceRef = useRef<PresenceState>({
@@ -93,6 +99,11 @@ export function useStoryRealtime({
   const onSyncRef = useRef(onSync);
   const onLaserRef = useRef(onLaser);
   const onCursorRef = useRef(onCursor);
+  const onPresenceLeaveRef = useRef(onPresenceLeave);
+  const onReconnectRef = useRef(onReconnect);
+  // 첫 SUBSCRIBED 는 reconnect 가 아님 (초기 연결).
+  // 두 번째 이상 SUBSCRIBED 일 때만 onReconnect 발화.
+  const hasSubscribedOnceRef = useRef(false);
   const retryCountRef = useRef(0);
   const MAX_RETRIES = 10;
   const [presences, setPresences] = useState<PresenceState[]>([]);
@@ -112,6 +123,12 @@ export function useStoryRealtime({
   useEffect(() => {
     onCursorRef.current = onCursor;
   }, [onCursor]);
+  useEffect(() => {
+    onPresenceLeaveRef.current = onPresenceLeave;
+  }, [onPresenceLeave]);
+  useEffect(() => {
+    onReconnectRef.current = onReconnect;
+  }, [onReconnect]);
 
   useEffect(() => {
     let cancelled = false;
@@ -191,6 +208,14 @@ export function useStoryRealtime({
       })
       .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
         console.log('[useStoryRealtime] ← leave:', key, leftPresences);
+        // 떠난 사용자의 보조 state (cursor 등) 정리 — 메모리 절약 + 즉시 사라짐
+        const ids = new Set<string>();
+        if (typeof key === 'string') ids.add(key);
+        for (const p of leftPresences ?? []) {
+          const userId = (p as unknown as { userId?: unknown })?.userId;
+          if (typeof userId === 'string') ids.add(userId);
+        }
+        for (const id of ids) onPresenceLeaveRef.current?.(id);
       });
 
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -226,6 +251,14 @@ export function useStoryRealtime({
         setStatus('connected');
         const trackResult = await channel.track(presenceRef.current);
         console.log('[useStoryRealtime] track 결과:', trackResult);
+        // 첫 SUBSCRIBED 는 초기 연결, 두 번째 이상은 재연결.
+        // 재연결 시 호출자(StoryWorkspace)가 서버 snapshot 재로드해서
+        // missing broadcast 들을 회복할 수 있게 알림.
+        if (hasSubscribedOnceRef.current) {
+          console.log('[useStoryRealtime] 재연결 감지 → onReconnect 호출');
+          onReconnectRef.current?.();
+        }
+        hasSubscribedOnceRef.current = true;
       } else if (subscribeStatus === 'CLOSED') {
         if (!cancelled) {
           setStatus('closed');
