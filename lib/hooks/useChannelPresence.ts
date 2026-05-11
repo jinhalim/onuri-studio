@@ -86,10 +86,20 @@ export function useChannelPresence({
       if (!cancelled) setPresences(list);
     });
 
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
     channel.subscribe(async (status) => {
       if (cancelled) return;
+      console.log('[useChannelPresence] status:', status);
       if (status === 'SUBSCRIBED' && stateRef.current) {
         await channel.track(stateRef.current);
+      } else if (status === 'CLOSED') {
+        if (retryTimer) clearTimeout(retryTimer);
+        retryTimer = setTimeout(() => {
+          if (cancelled) return;
+          console.log('[useChannelPresence] CLOSED 후 재구독 시도');
+          void channel.subscribe();
+        }, 1500);
       }
     });
 
@@ -97,6 +107,7 @@ export function useChannelPresence({
 
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
       channel.unsubscribe();
       channelRef.current = null;
     };

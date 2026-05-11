@@ -102,6 +102,10 @@ export function useStoryRealtime({
         });
         onSyncRef.current(p);
       })
+      // 시스템 이벤트(연결/끊김/오류) 가시화 — 디버깅용
+      .on('system', {}, (payload: unknown) => {
+        console.log('[useStoryRealtime] system event:', payload);
+      })
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState<PresenceState>();
         // 같은 user.id 가 여러 탭으로 접속하면 배열 길이가 N. userId 단위로 dedupe.
@@ -132,6 +136,8 @@ export function useStoryRealtime({
         console.log('[useStoryRealtime] ← leave:', key, leftPresences);
       });
 
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
     channel.subscribe(async (subscribeStatus, err) => {
       if (cancelled) return;
       console.log('[useStoryRealtime] subscribe status:', subscribeStatus, err ?? '');
@@ -140,9 +146,30 @@ export function useStoryRealtime({
         const trackResult = await channel.track(presenceRef.current);
         console.log('[useStoryRealtime] track 결과:', trackResult);
       } else if (subscribeStatus === 'CLOSED') {
-        setStatus('closed');
+        // cleanup 으로 닫힌 게 아니라면 재구독 시도
+        if (!cancelled) {
+          console.warn('[useStoryRealtime] CLOSED 수신, 1.5초 후 재구독');
+          setStatus('closed');
+          if (retryTimer) clearTimeout(retryTimer);
+          retryTimer = setTimeout(() => {
+            if (cancelled) return;
+            console.log('[useStoryRealtime] 재구독 시도');
+            setStatus('connecting');
+            void channel.subscribe();
+          }, 1500);
+        }
       } else if (subscribeStatus === 'CHANNEL_ERROR' || subscribeStatus === 'TIMED_OUT') {
         setStatus('error');
+        // CHANNEL_ERROR / TIMED_OUT 도 재시도 (Supabase 클라이언트 자체 백오프 위에 보강)
+        if (!cancelled) {
+          if (retryTimer) clearTimeout(retryTimer);
+          retryTimer = setTimeout(() => {
+            if (cancelled) return;
+            console.log('[useStoryRealtime] 오류 후 재구독 시도');
+            setStatus('connecting');
+            void channel.subscribe();
+          }, 3000);
+        }
       }
     });
 
@@ -150,6 +177,7 @@ export function useStoryRealtime({
 
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
       channel.unsubscribe();
       channelRef.current = null;
     };
