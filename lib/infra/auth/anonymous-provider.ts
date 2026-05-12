@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import type { AuthProviderAdapter, AuthResult } from './types';
 import { nicknameSchema } from '@/lib/security/validators';
 import { assignAnonymousColor } from '@/lib/usecases/assign-anonymous-color';
+import { provisionOnboardingSample } from '@/lib/usecases/provision-onboarding-sample';
 import { createAdminClient } from '@/lib/infra/supabase/admin';
 import { isSupabaseConfigured } from '@/lib/config/env';
 
@@ -83,6 +84,14 @@ export const anonymousProvider: AuthProviderAdapter = {
       maxAge: ANON_COOKIE_MAX_AGE,
       path: '/',
     });
+
+    // 신규 사용자 onboarding — "채널 메뉴얼" + "스토리 화이트보드 사용법" 자동 생성.
+    // 실패해도 sign-in 자체는 막지 않음 (try/catch, 로그만).
+    try {
+      await provisionOnboardingSample(authData.user.id);
+    } catch (err) {
+      console.error('[anonymous-provider] onboarding 실패 (sign-in 자체는 성공):', err);
+    }
 
     return {
       userId: authData.user.id,

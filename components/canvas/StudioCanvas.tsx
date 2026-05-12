@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ScribbleOverlayUtil,
   Tldraw,
+  useValue,
   type Editor,
   type TLComponents,
   type TLRecord,
@@ -12,6 +13,7 @@ import 'tldraw/tldraw.css';
 import { customShapeUtils } from './customShapeUtils';
 import { CustomStylePanel } from './CustomStylePanel';
 import { NoteAuthorLayer } from './NoteAuthorLayer';
+import { OnboardingOverlay } from '@/components/story/OnboardingOverlay';
 // cn 은 SaveIndicator 제거 후 미사용 → import 도 삭제
 
 // tldraw v5 의 ScribbleOverlayUtil 은 <canvas> 에 직접 레이저 stroke 를 그린다.
@@ -498,6 +500,7 @@ export function StudioCanvas({
       <NoteAuthorLayer editor={editor} />
       <RemoteLaserLayer strokes={allLaserStrokes} editor={editor} />
       <PresenceLayer presences={presences} editor={editor} currentUserId={currentUserId} />
+      <OnboardingForEmptyBoard editor={editor} storyId={storyId} />
 
       {/* 우상단: 읽기 전용 배지만. 저장 상태는 StoryWorkspace 헤더의 SaveStatusBadge 가 표시. */}
       {!canEdit && (
@@ -515,4 +518,22 @@ function ReadOnlyBadge() {
       읽기 전용 (방문자 모드)
     </div>
   );
+}
+
+// editor 가 reactive 라 useValue 로 도형 개수 추적 → 도형 추가/삭제 시 자동 갱신.
+// 분리한 이유: useValue 가 editor 가 있어야 호출 가능 (null 가드).
+function OnboardingForEmptyBoard({
+  editor,
+  storyId,
+}: {
+  editor: Editor | null;
+  storyId: string;
+}) {
+  const isEmpty = useValue(
+    'is empty board',
+    () => (editor ? editor.getCurrentPageShapeIds().size === 0 : false),
+    [editor],
+  );
+  if (!editor) return null;
+  return <OnboardingOverlay isEmpty={isEmpty} storyId={storyId} />;
 }
