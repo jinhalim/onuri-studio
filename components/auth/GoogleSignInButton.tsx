@@ -11,9 +11,11 @@ interface Props {
   /** 로그인 후 돌아갈 경로 — 보통 setup-nickname 가 처리 후 / 로 보냄. */
   redirectTo?: string;
   className?: string;
+  /** 버튼 라벨. default "Google 로 로그인". 마이페이지의 연동 버튼은 "Google 계정 연결". */
+  label?: string;
 }
 
-export function GoogleSignInButton({ redirectTo, className }: Props) {
+export function GoogleSignInButton({ redirectTo, className, label }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,7 +59,7 @@ export function GoogleSignInButton({ redirectTo, className }: Props) {
         aria-label="Google 계정으로 로그인"
       >
         <GoogleLogo />
-        <span>{loading ? '연결 중…' : 'Google 로 로그인'}</span>
+        <span>{loading ? '연결 중…' : (label ?? 'Google 로 로그인')}</span>
       </button>
       {error && (
         <p role="alert" className="text-sm text-rec">

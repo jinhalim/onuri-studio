@@ -5,6 +5,8 @@ import { SignedInBanner } from '@/components/auth/SignedInBanner';
 import { ChannelList } from '@/components/channel/ChannelList';
 import { HistoryChannelCard } from '@/components/me/HistoryChannelCard';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { enabledProviders } from '@/lib/infra/auth/provider-registry';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { listMyChannels } from '@/lib/usecases/list-my-channels';
 import { getMyHistory } from '@/lib/usecases/get-my-history';
@@ -25,6 +27,13 @@ export default async function MyPage() {
   // 본인 소유 채널은 "내가 만든 채널" 섹션에 이미 표시 → recent 에서 제외해서 중복 방지
   const myChannelIds = new Set(myChannels.map((c) => c.id));
   const recentVisits = history.recent.filter((h) => !myChannelIds.has(h.channelId));
+
+  // Google 연동 가능 조건: 익명 사용자 + google provider 활성
+  const providers = enabledProviders();
+  const canConnectGoogle =
+    user.isAnonymous &&
+    !user.linkedProviders.includes('google') &&
+    providers.includes('google');
 
   return (
     <main
@@ -70,8 +79,16 @@ export default async function MyPage() {
           <dt className="text-fg-muted">인증 방식</dt>
           <dd className="text-fg">{user.primaryAuthProvider}</dd>
           <dt className="text-fg-muted">연결된 제공자</dt>
-          <dd className="text-fg">
-            {user.linkedProviders.length === 0 ? '없음' : user.linkedProviders.join(', ')}
+          <dd className="flex flex-wrap items-center gap-2 text-fg">
+            <span>
+              {user.linkedProviders.length === 0 ? '없음' : user.linkedProviders.join(', ')}
+            </span>
+            {canConnectGoogle && (
+              <GoogleSignInButton
+                label="Google 계정 연결"
+                className="h-8 px-3 text-xs"
+              />
+            )}
           </dd>
         </dl>
         {/* TODO[Phase9-Email]: 익명일 때 "이메일로 저장" 버튼 노출 */}

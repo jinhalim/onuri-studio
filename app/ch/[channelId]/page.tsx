@@ -5,9 +5,11 @@ import { SignedInBanner } from '@/components/auth/SignedInBanner';
 import { ChannelStoriesSection } from '@/components/channel/ChannelStoriesSection';
 import { ShareButton } from '@/components/share/ShareButton';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { FavoriteToggle } from '@/components/shared/FavoriteToggle';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { getChannelWithStories } from '@/lib/usecases/get-channel-with-stories';
 import { recordParticipation } from '@/lib/usecases/record-participation';
+import { createAdminClient } from '@/lib/infra/supabase/admin';
 import { urls } from '@/lib/config/urls';
 
 interface ChannelGuidePageProps {
@@ -35,6 +37,20 @@ export default async function ChannelGuidePage({ params }: ChannelGuidePageProps
     }).catch((err) => console.error('[ChannelGuidePage] recordParticipation 실패:', err));
   }
 
+  // 즐겨찾기 상태 조회 (로그인 사용자만)
+  let isFavorite = false;
+  if (user) {
+    const admin = createAdminClient();
+    const { data: part } = await admin
+      .from('participations')
+      .select('is_favorite')
+      .eq('user_id', user.id)
+      .eq('channel_id', data.channel.id)
+      .is('story_id', null)
+      .maybeSingle();
+    isFavorite = part?.is_favorite ?? false;
+  }
+
   const shareUrl = urls.channel(data.channel.id);
 
   return (
@@ -56,9 +72,12 @@ export default async function ChannelGuidePage({ params }: ChannelGuidePageProps
       </header>
 
       <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-baseline gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-3xl font-bold text-fg">{data.channel.name}</h1>
           <span className="text-sm text-fg-muted">by {data.ownerNickname}</span>
+          {user && (
+            <FavoriteToggle channelId={data.channel.id} initial={isFavorite} size="md" />
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <code className="rounded bg-brand-surface px-2 py-1 text-xs text-fg-muted">

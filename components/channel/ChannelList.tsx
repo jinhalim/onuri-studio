@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { MyChannelSummary } from '@/lib/usecases/list-my-channels';
+import { FavoriteToggle } from '@/components/shared/FavoriteToggle';
 import { cn } from '@/lib/utils';
 
 interface ChannelListProps {
@@ -18,7 +19,7 @@ export function ChannelList({ channels }: ChannelListProps) {
   return (
     <ul className="flex w-full flex-col gap-2">
       {channels.map((c) => (
-        <li key={c.id}>
+        <li key={c.id} className="relative">
           <Link
             href={`/ch/${c.id}`}
             className={cn(
@@ -27,6 +28,7 @@ export function ChannelList({ channels }: ChannelListProps) {
               'hover:border-live/60',
             )}
           >
+            <FavoriteToggle channelId={c.id} initial={c.isFavorite} size="sm" />
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate font-medium text-fg">{c.name}</span>
               <span className="truncate text-xs text-fg-muted">

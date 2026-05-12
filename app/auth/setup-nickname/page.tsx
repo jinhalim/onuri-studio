@@ -4,6 +4,7 @@ import { Wordmark } from '@/components/brand/Wordmark';
 import { SetupNicknameForm } from '@/components/auth/SetupNicknameForm';
 import { createClient as createServerSupabase } from '@/lib/infra/supabase/server';
 import { createAdminClient } from '@/lib/infra/supabase/admin';
+import { readAnonymousUserIdFromCookie } from '@/lib/infra/auth/anonymous-provider';
 
 interface SetupNicknamePageProps {
   searchParams: { suggested?: string };
@@ -28,6 +29,21 @@ export default async function SetupNicknamePage({ searchParams }: SetupNicknameP
     redirect('/');
   }
 
+  // 익명 nickname 우선, 없으면 Google displayName, 없으면 빈 값.
+  // 익명에서 Google 연동한 사용자는 본인이 쓰던 닉네임 그대로 이어쓸 수 있게.
+  let suggested = searchParams.suggested ?? '';
+  const anonId = readAnonymousUserIdFromCookie();
+  if (anonId) {
+    const { data: anonUser } = await admin
+      .from('users')
+      .select('nickname, is_anonymous')
+      .eq('id', anonId)
+      .maybeSingle();
+    if (anonUser?.is_anonymous && anonUser.nickname) {
+      suggested = anonUser.nickname;
+    }
+  }
+
   return (
     <main
       className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center gap-8 px-4 py-6 sm:px-6 sm:py-12"
@@ -47,7 +63,7 @@ export default async function SetupNicknamePage({ searchParams }: SetupNicknameP
             Google 로 로그인했어요. 사용할 닉네임을 입력해주세요.
           </p>
         </div>
-        <SetupNicknameForm suggested={searchParams.suggested} />
+        <SetupNicknameForm suggested={suggested} />
       </section>
     </main>
   );

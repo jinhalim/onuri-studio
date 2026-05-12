@@ -8,6 +8,7 @@ import type { Channel } from '@/lib/domain/channel';
 export interface MyChannelSummary extends Channel {
   storyCount: number;
   lastStoryUpdatedAt: string | null;
+  isFavorite: boolean;
 }
 
 export async function listMyChannels(userId: string): Promise<MyChannelSummary[]> {
@@ -29,8 +30,30 @@ export async function listMyChannels(userId: string): Promise<MyChannelSummary[]
     throw new Error(`LIST_CHANNELS_FAILED: ${error.message}`);
   }
 
-  return (data ?? []).map((row) => {
-    const stories = (row.stories as { id: string; title_updated_at: string }[]) ?? [];
+  const rows = (data ?? []) as {
+    id: string;
+    name: string;
+    owner_id: string;
+    created_at: string;
+    stories: { id: string; title_updated_at: string }[] | null;
+  }[];
+
+  // 본인 채널들의 즐겨찾기 상태 한 번에 조회 (channel-level participation 만)
+  const channelIds = rows.map((r) => r.id);
+  let favoriteSet = new Set<string>();
+  if (channelIds.length > 0) {
+    const { data: favRows } = await supabase
+      .from('participations')
+      .select('channel_id')
+      .eq('user_id', userId)
+      .is('story_id', null)
+      .eq('is_favorite', true)
+      .in('channel_id', channelIds);
+    favoriteSet = new Set((favRows ?? []).map((r) => r.channel_id as string));
+  }
+
+  return rows.map((row) => {
+    const stories = row.stories ?? [];
     const lastUpdated = stories.length
       ? stories
           .map((s) => s.title_updated_at)
@@ -44,6 +67,7 @@ export async function listMyChannels(userId: string): Promise<MyChannelSummary[]
       createdAt: row.created_at,
       storyCount: stories.length,
       lastStoryUpdatedAt: lastUpdated,
+      isFavorite: favoriteSet.has(row.id),
     };
   });
 }

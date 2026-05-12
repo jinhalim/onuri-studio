@@ -89,6 +89,10 @@ export function useStoryRealtime({
   onReconnect,
 }: UseStoryRealtimeOptions): UseStoryRealtimeResult {
   const channelRef = useRef<RealtimeChannel | null>(null);
+  // 채널 SUBSCRIBED 여부. send 호출 전 ready 체크용.
+  // Supabase Realtime SDK 가 미준비 채널에서 send 호출 시 REST fallback 하면서
+  // deprecation warning 발생 → ready 일 때만 send 호출해서 warning + 불필요한 REST 호출 차단.
+  const isReadyRef = useRef(false);
   const presenceRef = useRef<PresenceState>({
     userId: user.id,
     nickname: user.nickname,
@@ -248,6 +252,7 @@ export function useStoryRealtime({
       console.log('[useStoryRealtime] subscribe status:', subscribeStatus, err ?? '');
       if (subscribeStatus === 'SUBSCRIBED') {
         retryCountRef.current = 0; // 성공 시 카운터 리셋
+        isReadyRef.current = true; // send 허용
         setStatus('connected');
         const trackResult = await channel.track(presenceRef.current);
         console.log('[useStoryRealtime] track 결과:', trackResult);
@@ -261,10 +266,12 @@ export function useStoryRealtime({
         hasSubscribedOnceRef.current = true;
       } else if (subscribeStatus === 'CLOSED') {
         if (!cancelled) {
+          isReadyRef.current = false;
           setStatus('closed');
           scheduleRetry(1500, 'CLOSED 수신');
         }
       } else if (subscribeStatus === 'CHANNEL_ERROR' || subscribeStatus === 'TIMED_OUT') {
+        isReadyRef.current = false;
         setStatus('error');
         scheduleRetry(3000, `${subscribeStatus} 수신`);
       }
@@ -274,6 +281,7 @@ export function useStoryRealtime({
 
     return () => {
       cancelled = true;
+      isReadyRef.current = false;
       if (retryTimer) clearTimeout(retryTimer);
       channel.unsubscribe();
       channelRef.current = null;
@@ -288,6 +296,9 @@ export function useStoryRealtime({
         console.warn('[useStoryRealtime] broadcast 호출됐으나 channel null');
         return;
       }
+      // 채널 SUBSCRIBED 아니면 skip — SDK 의 REST fallback + deprecation warning 회피.
+      // 손실은 다음 변경 (last-write-wins) + 1.5s 자동저장으로 자연 회복.
+      if (!isReadyRef.current) return;
       console.log('[useStoryRealtime] → broadcast 송신:', {
         added: changes.added?.length ?? 0,
         updated: changes.updated?.length ?? 0,
@@ -321,7 +332,7 @@ export function useStoryRealtime({
   const broadcastLaser = useCallback(
     (point: Omit<LaserPayload, 'fromUserId' | 'color'>) => {
       const channel = channelRef.current;
-      if (!channel) return;
+      if (!channel || !isReadyRef.current) return;
       void channel.send({
         type: 'broadcast',
         event: 'laser',
@@ -338,7 +349,7 @@ export function useStoryRealtime({
   const broadcastCursor = useCallback(
     (point: Omit<CursorPayload, 'fromUserId'>) => {
       const channel = channelRef.current;
-      if (!channel) return;
+      if (!channel || !isReadyRef.current) return;
       void channel.send({
         type: 'broadcast',
         event: 'cursor',
@@ -354,7 +365,7 @@ export function useStoryRealtime({
     if (status !== 'connected') return;
     const interval = window.setInterval(() => {
       const channel = channelRef.current;
-      if (!channel) return;
+      if (!channel || !isReadyRef.current) return;
       void channel.send({
         type: 'broadcast',
         event: 'keepalive',

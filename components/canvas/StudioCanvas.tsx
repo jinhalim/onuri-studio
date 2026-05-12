@@ -141,6 +141,9 @@ export function StudioCanvas({
   const laserTimerRef = useRef<number>(0);
   const laserStrokeIdRef = useRef<string | null>(null);
   const drawingResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // isDrawing 토글: 매 store change 마다 updatePresence 부르면 presence rate limit
+  // (Supabase ~100ms 기본) 초과 → 채널 CLOSED 무한 루프. 값이 바뀔 때만 호출.
+  const isDrawingPresenceRef = useRef(false);
   const laserShareModeRef = useRef(laserShareMode);
   const currentUserNicknameRef = useRef(currentUserNickname);
   useEffect(() => {
@@ -283,11 +286,15 @@ export function StudioCanvas({
         broadcast({ added, updated, removed });
       }
 
-      // On Air 표시
-      updatePresence({ isDrawing: true });
-      onLocalDrawingChange(true);
+      // On Air 표시 — isDrawing 값이 바뀔 때만 presence track 호출 (rate limit 회피)
+      if (!isDrawingPresenceRef.current) {
+        isDrawingPresenceRef.current = true;
+        updatePresence({ isDrawing: true });
+        onLocalDrawingChange(true);
+      }
       if (drawingResetRef.current) clearTimeout(drawingResetRef.current);
       drawingResetRef.current = setTimeout(() => {
+        isDrawingPresenceRef.current = false;
         updatePresence({ isDrawing: false });
         onLocalDrawingChange(false);
       }, DRAWING_RESET_MS);

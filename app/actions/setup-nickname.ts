@@ -42,6 +42,15 @@ export async function setupNicknameAction(
 
   const admin = createAdminClient();
 
+  // 익명 흔적 먼저 흡수 — 익명 user 가 그 nickname 을 점유 중이면 unique check
+  // 에 걸리니, 익명 user 를 먼저 삭제해서 nickname 슬롯을 해제한 뒤 update.
+  // 사용자 UX: 익명 시 쓰던 닉네임을 그대로 Google 계정에 이어 쓰기 가능.
+  try {
+    await transferAnonymousToUser(userId);
+  } catch (err) {
+    console.error('[setupNicknameAction] anon transfer 실패 (무시):', err);
+  }
+
   // 닉네임 중복 체크 (본인 제외)
   const { data: existing } = await admin
     .from('users')
@@ -65,12 +74,7 @@ export async function setupNicknameAction(
     return { ok: false, error: '닉네임 저장에 실패했어요' };
   }
 
-  // 익명 흔적 흡수 (D-013) + onboarding 샘플 생성
-  try {
-    await transferAnonymousToUser(userId);
-  } catch (err) {
-    console.error('[setupNicknameAction] anon transfer 실패 (무시):', err);
-  }
+  // onboarding 샘플 생성 (이미 onboarded_at 있으면 skip)
   try {
     await provisionOnboardingSample(userId);
   } catch (err) {
