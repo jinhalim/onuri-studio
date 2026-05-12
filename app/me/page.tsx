@@ -26,7 +26,13 @@ export default async function MyPage() {
   const recentVisits = history.recent.filter((h) => !myChannelIds.has(h.channelId));
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-10 px-6 py-12">
+    <main
+      className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-6 sm:gap-10 sm:px-6 sm:py-12"
+      style={{
+        paddingTop: 'max(1.5rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
+      }}
+    >
       <header className="flex flex-wrap items-start justify-between gap-4">
         <Link href="/" className="hover:opacity-80">
           <Wordmark size="sm" />

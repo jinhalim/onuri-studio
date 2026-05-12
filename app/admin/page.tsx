@@ -17,7 +17,13 @@ export default async function AdminPage() {
   const dashboard = await getAdminDashboard();
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col gap-10 px-6 py-12">
+    <main
+      className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:gap-10 sm:px-6 sm:py-12"
+      style={{
+        paddingTop: 'max(1.5rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
+      }}
+    >
       <header className="flex flex-wrap items-start justify-between gap-4">
         <Link href="/" className="hover:opacity-80">
           <Wordmark size="sm" />
@@ -48,8 +54,8 @@ export default async function AdminPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-fg-muted">최근 사용자</h2>
-        <div className="overflow-hidden rounded-md border border-divider bg-brand-surface/50">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-md border border-divider bg-brand-surface/50">
+          <table className="w-full min-w-[480px] text-sm">
             <thead className="bg-brand-bezel/50 text-xs text-fg-muted">
               <tr>
                 <th className="px-3 py-2 text-left">닉네임</th>
@@ -80,8 +86,8 @@ export default async function AdminPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-fg-muted">최근 채널</h2>
-        <div className="overflow-hidden rounded-md border border-divider bg-brand-surface/50">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-md border border-divider bg-brand-surface/50">
+          <table className="w-full min-w-[480px] text-sm">
             <thead className="bg-brand-bezel/50 text-xs text-fg-muted">
               <tr>
                 <th className="px-3 py-2 text-left">이름</th>
@@ -113,8 +119,8 @@ export default async function AdminPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-fg-muted">최근 스토리</h2>
-        <div className="overflow-hidden rounded-md border border-divider bg-brand-surface/50">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-md border border-divider bg-brand-surface/50">
+          <table className="w-full min-w-[480px] text-sm">
             <thead className="bg-brand-bezel/50 text-xs text-fg-muted">
               <tr>
                 <th className="px-3 py-2 text-left">제목</th>

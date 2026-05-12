@@ -42,6 +42,25 @@
   body {
     font-feature-settings: 'ss01', 'ss02', 'cv01', 'cv11';
     min-height: 100dvh;
+    /* iPhone notch / iPad home indicator 안전영역 padding (양면 모두) */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  /* iOS Safari 가 input/textarea focus 시 자동 zoom 하는 조건은 font-size < 16px.
+     16px 이상이면 zoom 안 일어남 → 캔버스/패널 위치가 어긋나지 않음. */
+  input,
+  textarea,
+  select,
+  button {
+    font-size: 16px;
+  }
+  /* 터치 디바이스에서 hit-target 최소 사이즈 보장 (WCAG 2.5.5).
+     단, tldraw 의 자체 캔버스 컨트롤은 제외 (자체 터치 영역 가짐). */
+  @media (hover: none) and (pointer: coarse) {
+    button:not(.tlui-button):not([data-no-min-tap]),
+    a[role='button'] {
+      min-height: 32px;
+    }
   }
   ::selection {
     background-color: var(--accent-rec);

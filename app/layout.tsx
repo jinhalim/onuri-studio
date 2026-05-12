@@ -1,6 +1,19 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { env } from '@/lib/config/env';
+
+// 모바일/태블릿 (iPad 포함) 최적화 — Phase 6.
+// - viewport-fit: cover → iPhone notch / iPad home indicator 안전영역 활용
+// - initial-scale=1, maximum-scale=1 → input focus 시 iOS Safari 자동 zoom 방지
+//   (대신 globals.css 의 font-size: 16px+ 로 가독성 보장)
+// - user-scalable=no 는 접근성 가이드라인 위반이라 제외 (수동 핀치줌 허용)
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#0B0B0F',
+};
 
 export const metadata: Metadata = {
   title: {

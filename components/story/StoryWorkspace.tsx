@@ -289,7 +289,10 @@ export function StoryWorkspace({
 
   return (
     <main className="flex h-dvh flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-divider bg-brand-bezel px-6 py-3">
+      <header
+        className="flex flex-wrap items-center justify-between gap-2 border-b border-divider bg-brand-bezel px-4 py-2 sm:gap-3 sm:px-6 sm:py-3"
+        style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}
+      >
         {/* Left: back + title */}
         <div className="flex flex-col gap-1">
           <Link
