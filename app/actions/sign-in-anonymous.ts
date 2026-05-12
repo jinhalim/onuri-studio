@@ -39,6 +39,9 @@ export async function signInAnonymous(
 }
 
 function prettyError(raw: string): string {
+  if (raw.startsWith('NICKNAME_TAKEN')) {
+    return '이미 사용 중인 닉네임이에요. 다른 닉네임을 입력해주세요.';
+  }
   if (raw.startsWith('SUPABASE_NOT_CONFIGURED')) {
     return 'Supabase가 아직 설정되지 않았어요. .env.local 을 확인해주세요.';
   }

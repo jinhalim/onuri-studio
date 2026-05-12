@@ -37,6 +37,17 @@ export const anonymousProvider: AuthProviderAdapter = {
     const sessionToken = nanoid(32);
     const supabase = createAdminClient();
 
+    // 닉네임 중복 미리 체크 — 정상 경로의 에러를 명확히 분리.
+    // race condition 은 0009 의 unique index + insert 시점 fallback 으로 막음.
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .eq('nickname', nickname)
+      .maybeSingle();
+    if (existing) {
+      throw new Error('NICKNAME_TAKEN: 이미 사용 중인 닉네임');
+    }
+
     // Supabase auth.admin.createUser 는 email 또는 phone 이 최소 하나 필요.
     // 익명 트랙에선 충돌 불가능한 fake 이메일(@anon.onuri.local)을 생성해서 대체.
     // Phase 9 회원 전환 시 이 fake 이메일을 실제 이메일로 updateUserById 한다.
@@ -64,6 +75,12 @@ export const anonymousProvider: AuthProviderAdapter = {
     });
     if (profileError) {
       console.error('[anonymous-provider] public.users insert 실패:', profileError);
+      // unique violation (Postgres 23505) → 미리 체크 통과 후 동시 가입 race condition.
+      // 이미 만든 auth.users row 정리하고 친절 에러로 변환.
+      if (profileError.code === '23505') {
+        await supabase.auth.admin.deleteUser(authData.user.id).catch(() => {});
+        throw new Error('NICKNAME_TAKEN: 이미 사용 중인 닉네임 (동시 가입)');
+      }
       throw new Error(`USER_PROFILE_CREATE_FAILED: ${profileError.message}`);
     }
 
