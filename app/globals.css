@@ -37,17 +37,18 @@
 }
 
 html[data-theme='light'] {
-  /* 배경 (라이트) — 순백 대신 약간 따뜻한 off-white 로 눈 피로 완화 */
+  /* 배경 (라이트) — 사용자 요청: 화이트 메인.
+     bezel/screen 은 순백, surface 는 거의 흰색 + 미세 톤(카드 영역만 살짝 구분). */
   --bg-bezel:      #FFFFFF;
-  --bg-screen:     #F7F7FA;
-  --bg-surface:    #ECECF2;
+  --bg-screen:     #FFFFFF;
+  --bg-surface:    #F7F7F8;
 
-  /* 텍스트 (라이트) — 강한 검정 대신 진한 청회색 (가독성 + 부드러움) */
-  --text-primary:  #16161D;
-  --text-muted:    #5A5A6B;
+  /* 텍스트 (라이트) — 사용자 요청: 거의 검정. 가독성 위해 순흑보다 살짝 부드럽게. */
+  --text-primary:  #0A0A0F;
+  --text-muted:    #4D4D5A;
 
-  /* 구분선 (라이트) */
-  --divider:       #D8D8E0;
+  /* 구분선 (라이트) — 카드/패널 경계 확실하게 보이도록 약간 진하게 */
+  --divider:       #DCDCE0;
 
   color-scheme: light;
 }
