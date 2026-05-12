@@ -112,9 +112,6 @@ export default async function MyPage() {
         )}
       </section>
 
-      <footer className="mt-auto pt-12 text-xs text-fg-muted/70">
-        Phase 5 — 마이페이지 히스토리 (최근 방문 + 즐겨찾기)
-      </footer>
     </main>
   );
 }

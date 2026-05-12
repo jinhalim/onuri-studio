@@ -17,7 +17,13 @@ export default async function LandingPage() {
   const providers = enabledProviders();
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-12 px-6 py-12">
+    <main
+      className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-8 px-4 py-6 sm:gap-12 sm:px-6 sm:py-12"
+      style={{
+        paddingTop: 'max(1.5rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
+      }}
+    >
       <header className="flex items-start justify-between gap-4">
         <Wordmark size="md" withTagline={!user} />
         {user && (
@@ -53,9 +59,7 @@ export default async function LandingPage() {
         </section>
       )}
 
-      <footer className="mt-auto pt-12 text-xs text-fg-muted/70">
-        Phase 2 — 채널/스토리 CRUD / 화이트보드는 Phase 3부터
-      </footer>
+      {/* Phase 안내 footer 는 dev 흔적 — production 에서 사용자에게 노출 부적절 → 제거 */}
     </main>
   );
 }

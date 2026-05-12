@@ -154,9 +154,6 @@ export default async function AdminPage() {
         </div>
       </section>
 
-      <footer className="mt-auto pt-12 text-xs text-fg-muted/70">
-        Phase 5 — 관리자 대시보드 (통계 + 최근 항목)
-      </footer>
     </main>
   );
 }

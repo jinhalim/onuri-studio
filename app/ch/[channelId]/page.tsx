@@ -74,9 +74,6 @@ export default async function ChannelGuidePage({ params }: ChannelGuidePageProps
         user={user}
       />
 
-      <footer className="mt-auto pt-12 text-xs text-fg-muted/70">
-        Phase 2 — Channel Guide / 화이트보드는 Phase 3부터 활성화
-      </footer>
     </main>
   );
 }

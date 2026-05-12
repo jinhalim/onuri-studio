@@ -22,19 +22,19 @@ export function ChannelList({ channels }: ChannelListProps) {
           <Link
             href={`/ch/${c.id}`}
             className={cn(
-              'flex items-center justify-between rounded-md px-4 py-3',
+              'flex items-center justify-between gap-3 rounded-md px-4 py-3',
               'border border-divider bg-brand-surface transition-colors',
               'hover:border-live/60',
             )}
           >
-            <div className="flex flex-col">
-              <span className="font-medium text-fg">{c.name}</span>
-              <span className="text-xs text-fg-muted">
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate font-medium text-fg">{c.name}</span>
+              <span className="truncate text-xs text-fg-muted">
                 {c.storyCount}개 스토리
                 {c.lastStoryUpdatedAt && ` · 최근 ${formatRelative(c.lastStoryUpdatedAt)}`}
               </span>
             </div>
-            <code className="text-xs text-fg-muted">{c.id}</code>
+            <code className="shrink-0 text-xs text-fg-muted">{c.id}</code>
           </Link>
         </li>
       ))}

@@ -17,7 +17,8 @@ export function CreateChannelForm() {
       <label htmlFor="channelName" className="text-sm text-fg-muted">
         새 채널 이름
       </label>
-      <div className="flex gap-2">
+      {/* 모바일에서는 세로로 stack (입력 위, 버튼 아래 — 버튼이 풀폭). 태블릿/데스크탑은 가로. */}
+      <div className="flex flex-col gap-2 sm:flex-row">
         <input
           id="channelName"
           name="name"
@@ -51,7 +52,7 @@ function SubmitButton() {
       type="submit"
       disabled={pending}
       className={cn(
-        'h-11 rounded-md bg-rec px-5 font-semibold text-fg',
+        'h-11 shrink-0 whitespace-nowrap rounded-md bg-rec px-5 font-semibold text-fg',
         'transition-all duration-200 ease-onuri',
         'hover:brightness-110 active:scale-[0.98]',
         'disabled:cursor-not-allowed disabled:opacity-60',
