@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Story } from '@/lib/domain/story';
 import type { ChannelPresence } from '@/lib/hooks/useChannelPresence';
+import { RelativeTime } from '@/components/shared/RelativeTime';
 import { cn } from '@/lib/utils';
 import { DeleteStoryButton } from './DeleteStoryButton';
 
@@ -96,7 +97,10 @@ export function StoryCard({ story, channelId, canEdit, livePresences = [] }: Sto
             {story.title}
           </Link>
           <span className="text-xs text-fg-muted">
-            마지막 수정: {formatRelative(latestModifiedAt(story.titleUpdatedAt, story.snapshotUpdatedAt))}
+            마지막 수정:{' '}
+            <RelativeTime
+              date={latestModifiedAt(story.titleUpdatedAt, story.snapshotUpdatedAt)}
+            />
           </span>
         </div>
 
@@ -120,17 +124,4 @@ export function StoryCard({ story, channelId, canEdit, livePresences = [] }: Sto
 function latestModifiedAt(titleAt: string, snapshotAt: string | null): string {
   if (!snapshotAt) return titleAt;
   return new Date(snapshotAt).getTime() > new Date(titleAt).getTime() ? snapshotAt : titleAt;
-}
-
-function formatRelative(iso: string): string {
-  const date = new Date(iso);
-  const diff = Date.now() - date.getTime();
-  const m = Math.floor(diff / 60_000);
-  if (m < 1) return '방금 전';
-  if (m < 60) return `${m}분 전`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}시간 전`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d}일 전`;
-  return date.toLocaleDateString('ko-KR');
 }

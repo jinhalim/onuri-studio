@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Star } from 'lucide-react';
 import { toggleFavoriteAction } from '@/app/actions/toggle-favorite';
 import type { ChannelHistoryItem } from '@/lib/usecases/get-my-history';
+import { RelativeTime } from '@/components/shared/RelativeTime';
 import { cn } from '@/lib/utils';
 
 // 마이페이지의 "최근 방문" / "즐겨찾기" 그리드용 카드.
@@ -58,22 +59,10 @@ export function HistoryChannelCard({ item }: HistoryChannelCardProps) {
           {item.myRole === 'owner' ? '내 채널' : `by ${item.ownerNickname}`}
         </p>
         <p className="text-[11px] text-fg-muted/70">
-          마지막 방문 {formatRelative(item.lastVisitedAt)}
+          마지막 방문 <RelativeTime date={item.lastVisitedAt} />
         </p>
       </Link>
     </article>
   );
 }
 
-function formatRelative(iso: string): string {
-  const date = new Date(iso);
-  const diff = Date.now() - date.getTime();
-  const m = Math.floor(diff / 60_000);
-  if (m < 1) return '방금 전';
-  if (m < 60) return `${m}분 전`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}시간 전`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d}일 전`;
-  return date.toLocaleDateString('ko-KR');
-}

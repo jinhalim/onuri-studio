@@ -493,6 +493,7 @@ export function StudioCanvas({
         overlayUtils={overlayUtils}
         shapeUtils={customShapeUtils}
         components={tldrawComponents}
+        licenseKey={process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY}
       />
       <NoteAuthorLayer editor={editor} />
       <RemoteLaserLayer strokes={allLaserStrokes} editor={editor} />

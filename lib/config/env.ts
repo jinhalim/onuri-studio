@@ -21,6 +21,11 @@ const schema = z.object({
   // ─── 보안 (Phase 6) ───
   RATE_LIMIT_REDIS_URL: z.string().optional(),
 
+  // ─── tldraw 라이선스 (Phase 6, production 배포 시) ───
+  // tldraw v5 부터 production 사용 시 license key 필요. community license 는
+  // tldraw.dev 에서 비상업적 용도에 한해 무료. dev/로컬은 미설정해도 동작.
+  NEXT_PUBLIC_TLDRAW_LICENSE_KEY: z.string().optional(),
+
   // ─── SSO (Phase 7+) ───
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
@@ -56,6 +61,7 @@ export const env = schema.parse(
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     NEXT_PUBLIC_YJS_WS_URL: process.env.NEXT_PUBLIC_YJS_WS_URL,
     RATE_LIMIT_REDIS_URL: process.env.RATE_LIMIT_REDIS_URL,
+    NEXT_PUBLIC_TLDRAW_LICENSE_KEY: process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY,
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,

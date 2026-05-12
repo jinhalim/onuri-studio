@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { Wordmark } from '@/components/brand/Wordmark';
 import { SignedInBanner } from '@/components/auth/SignedInBanner';
+import { RelativeTime } from '@/components/shared/RelativeTime';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { getAdminDashboard } from '@/lib/usecases/get-admin-dashboard';
 
@@ -76,7 +77,9 @@ export default async function AdminPage() {
                     {u.role === 'admin' ? '관리자' : '일반'}
                   </td>
                   <td className="px-3 py-2 text-fg-muted">{formatDate(u.createdAt)}</td>
-                  <td className="px-3 py-2 text-fg-muted">{formatRelative(u.lastSeenAt)}</td>
+                  <td className="px-3 py-2 text-fg-muted">
+                    <RelativeTime date={u.lastSeenAt} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -137,7 +140,11 @@ export default async function AdminPage() {
                   <td className="px-3 py-2 text-fg-muted">{s.channelName}</td>
                   <td className="px-3 py-2 text-fg-muted">{formatDate(s.createdAt)}</td>
                   <td className="px-3 py-2 text-fg-muted">
-                    {s.snapshotUpdatedAt ? formatRelative(s.snapshotUpdatedAt) : '저장 없음'}
+                    {s.snapshotUpdatedAt ? (
+                      <RelativeTime date={s.snapshotUpdatedAt} />
+                    ) : (
+                      '저장 없음'
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right">
                     <Link
@@ -170,17 +177,4 @@ function StatCard({ label, value, hint }: { label: string; value: number; hint?:
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ko-KR');
-}
-
-function formatRelative(iso: string): string {
-  const date = new Date(iso);
-  const diff = Date.now() - date.getTime();
-  const m = Math.floor(diff / 60_000);
-  if (m < 1) return '방금 전';
-  if (m < 60) return `${m}분 전`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}시간 전`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d}일 전`;
-  return date.toLocaleDateString('ko-KR');
 }
