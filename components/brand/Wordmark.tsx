@@ -37,7 +37,7 @@ export function Wordmark({ size = 'md', withTagline = false, className }: Wordma
         <span aria-hidden> Studio</span>
       </span>
       {withTagline && (
-        <span className={cn('text-fg-muted', s.tagline)}>모두의 방송, 우리의 스튜디오.</span>
+        <span className={cn('text-fg-muted', s.tagline)}>모두의 스토리, 우리의 스튜디오.</span>
       )}
     </div>
   );

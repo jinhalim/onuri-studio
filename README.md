@@ -1,6 +1,6 @@
 # Onuri Studio (온누리 스튜디오)
 
-> **The studio where everyone tunes in.** — 모두의 방송, 우리의 스튜디오.
+> **The studio where everyone tunes in.** — 모두의 스토리, 우리의 스튜디오.
 >
 > URL 한 줄로 입장하는 실시간 협업 화이트보드. 채널(Channel) → 스토리(Story) 구조에서 다중 사용자가 Yjs CRDT로 동시 편집한다.
 

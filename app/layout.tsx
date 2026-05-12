@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     default: env.NEXT_PUBLIC_APP_NAME,
     template: `%s · ${env.NEXT_PUBLIC_APP_NAME}`,
   },
-  description: '모두의 방송, 우리의 스튜디오. URL 한 줄로 입장하는 실시간 협업 화이트보드.',
+  description: '모두의 스토리, 우리의 스튜디오. URL 한 줄로 입장하는 실시간 협업 화이트보드.',
   metadataBase: new URL(env.NEXT_PUBLIC_APP_URL),
   openGraph: {
     title: env.NEXT_PUBLIC_APP_NAME,

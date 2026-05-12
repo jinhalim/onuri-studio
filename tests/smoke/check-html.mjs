@@ -33,7 +33,7 @@ expect('Wordmark "Studio" 텍스트', html.includes('Studio<'));
 expect('Wordmark 빨간 점 (bg-rec)', html.includes('bg-rec'));
 
 // 6. 태그라인
-expect('태그라인 "모두의 방송, 우리의 스튜디오"', html.includes('모두의 방송, 우리의 스튜디오'));
+expect('태그라인 "모두의 스토리, 우리의 스튜디오"', html.includes('모두의 스토리, 우리의 스튜디오'));
 
 // 7. NicknameForm
 expect('input[name="nickname"]', html.includes('name="nickname"'));

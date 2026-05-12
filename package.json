@@ -2,7 +2,7 @@
   "name": "onuri-studio",
   "version": "0.1.0",
   "private": true,
-  "description": "Onuri Studio — 모두의 방송, 우리의 스튜디오. 실시간 협업 화이트보드.",
+  "description": "Onuri Studio — 모두의 스토리, 우리의 스튜디오. 실시간 협업 화이트보드.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
