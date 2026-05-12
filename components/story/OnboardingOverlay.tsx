@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Pencil, Square, MessageSquare, MousePointer2, Type, Share2 } from 'lucide-react';
+import { X, Pencil, Square, StickyNote, Zap, Palette, Share2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface OnboardingOverlayProps {
@@ -84,14 +84,14 @@ export function OnboardingOverlay({ isEmpty, storyId }: OnboardingOverlayProps) 
           <Tip icon={<Square size={16} />} label="도형">
             사각형 · 원 · 화살표 · 텍스트.
           </Tip>
-          <Tip icon={<MessageSquare size={16} />} label="메모지">
+          <Tip icon={<StickyNote size={16} />} label="메모지">
             클릭 후 글자를 입력하세요. 우하단에 작성자 닉네임이 표시돼요.
           </Tip>
-          <Tip icon={<Type size={16} />} label="색상">
+          <Tip icon={<Palette size={16} />} label="색상">
             기본 12색 팔레트 + 무지개 ● 클릭으로 임의 색 선택.
           </Tip>
-          <Tip icon={<MousePointer2 size={16} />} label="레이저">
-            오른쪽 위 ⚡ 토글로 전체 공유 모드 — 함께 가리킬 수 있어요.
+          <Tip icon={<Zap size={16} />} label="레이저">
+            헤더의 ⚡ 토글로 전체 공유 모드 — 함께 가리킬 수 있어요.
           </Tip>
           <Tip icon={<Share2 size={16} />} label="공유">
             &ldquo;스토리 URL 공유&rdquo; 버튼으로 URL 복사 → 친구에게 보내면 실시간 협업.
