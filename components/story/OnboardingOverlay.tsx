@@ -55,56 +55,58 @@ export function OnboardingOverlay({ isEmpty, storyId }: OnboardingOverlayProps) 
         'pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-4',
       )}
     >
+      {/* 가독성 강화: 본문은 text-sm + text-fg (라이트/다크 둘 다 강한 대비).
+          배경/텍스트는 디자인 토큰 사용 → 라이트 모드도 자연스럽게 검정 텍스트 표시. */}
       <div
         className={cn(
           'pointer-events-auto relative w-full max-w-md rounded-lg border border-divider',
-          'bg-brand-bezel/95 p-6 shadow-2xl backdrop-blur-sm',
+          'bg-brand-bezel p-7 shadow-2xl',
         )}
       >
         <button
           type="button"
           onClick={handleDismiss}
           aria-label="안내 닫기"
-          className="absolute right-3 top-3 rounded-sm p-1 text-fg-muted hover:bg-brand-surface hover:text-fg"
+          className="absolute right-3 top-3 rounded-sm p-1.5 text-fg-muted hover:bg-brand-surface hover:text-fg"
         >
-          <X size={16} />
+          <X size={18} />
         </button>
 
-        <div className="mb-4 flex items-baseline gap-2">
-          <h2 className="text-lg font-bold text-fg">👋 환영합니다!</h2>
-          <span className="text-xs text-fg-muted">스토리 화이트보드 사용법</span>
+        <div className="mb-5 flex items-baseline gap-2">
+          <h2 className="text-xl font-bold text-fg">👋 환영합니다!</h2>
+          <span className="text-sm text-fg-muted">사용법</span>
         </div>
 
-        <ul className="flex flex-col gap-3 text-sm text-fg">
-          <Tip icon={<Pencil size={14} />} label="펜">
+        <ul className="flex flex-col gap-4">
+          <Tip icon={<Pencil size={16} />} label="펜">
             자유 곡선. 길게 그리면 자동으로 보정돼요.
           </Tip>
-          <Tip icon={<Square size={14} />} label="도형">
+          <Tip icon={<Square size={16} />} label="도형">
             사각형 · 원 · 화살표 · 텍스트.
           </Tip>
-          <Tip icon={<MessageSquare size={14} />} label="메모지">
+          <Tip icon={<MessageSquare size={16} />} label="메모지">
             클릭 후 글자를 입력하세요. 우하단에 작성자 닉네임이 표시돼요.
           </Tip>
-          <Tip icon={<Type size={14} />} label="색상">
+          <Tip icon={<Type size={16} />} label="색상">
             기본 12색 팔레트 + 무지개 ● 클릭으로 임의 색 선택.
           </Tip>
-          <Tip icon={<MousePointer2 size={14} />} label="레이저">
-            오른쪽 위 ⚡ 토글로 전체 공유 모드 — 다른 사용자와 함께 가리킬 수 있어요.
+          <Tip icon={<MousePointer2 size={16} />} label="레이저">
+            오른쪽 위 ⚡ 토글로 전체 공유 모드 — 함께 가리킬 수 있어요.
           </Tip>
-          <Tip icon={<Share2 size={14} />} label="공유">
+          <Tip icon={<Share2 size={16} />} label="공유">
             &ldquo;스토리 URL 공유&rdquo; 버튼으로 URL 복사 → 친구에게 보내면 실시간 협업.
           </Tip>
         </ul>
 
-        <div className="mt-5 flex items-center justify-between gap-2">
-          <span className="text-[11px] text-fg-muted/70">
-            도형을 하나 그리면 안내가 자동으로 사라져요.
+        <div className="mt-6 flex items-center justify-between gap-2">
+          <span className="text-xs text-fg-muted">
+            도형 하나 그리면 자동으로 사라져요.
           </span>
           <button
             type="button"
             onClick={handleDismiss}
             className={cn(
-              'rounded-md bg-rec px-3 py-1.5 text-xs font-semibold text-fg',
+              'rounded-md bg-rec px-4 py-2 text-sm font-semibold text-white',
               'hover:brightness-110 active:scale-[0.98]',
             )}
           >
@@ -126,13 +128,13 @@ function Tip({
   children: React.ReactNode;
 }) {
   return (
-    <li className="flex items-start gap-2.5">
-      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-brand-surface text-fg-muted">
+    <li className="flex items-start gap-3">
+      <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-surface text-fg">
         {icon}
       </span>
-      <div className="flex flex-col">
-        <span className="text-sm font-semibold text-fg">{label}</span>
-        <span className="text-xs text-fg-muted">{children}</span>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-base font-semibold text-fg">{label}</span>
+        <span className="text-sm text-fg">{children}</span>
       </div>
     </li>
   );
