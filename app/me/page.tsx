@@ -4,8 +4,10 @@ import { Wordmark } from '@/components/brand/Wordmark';
 import { SignedInBanner } from '@/components/auth/SignedInBanner';
 import { ChannelList } from '@/components/channel/ChannelList';
 import { HistoryChannelCard } from '@/components/me/HistoryChannelCard';
+import { NicknameEditInline } from '@/components/me/NicknameEditInline';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { ProviderBadge } from '@/components/auth/ProviderBadge';
 import { enabledProviders } from '@/lib/infra/auth/provider-registry';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { listMyChannels } from '@/lib/usecases/list-my-channels';
@@ -66,7 +68,9 @@ export default async function MyPage() {
         <h2 className="text-sm font-semibold text-fg-muted">계정 정보</h2>
         <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 rounded-md border border-divider bg-brand-surface/50 px-4 py-3 text-sm">
           <dt className="text-fg-muted">닉네임</dt>
-          <dd className="text-fg">{user.nickname}</dd>
+          <dd className="text-fg">
+            <NicknameEditInline initial={user.nickname} />
+          </dd>
           <dt className="text-fg-muted">색상</dt>
           <dd className="flex items-center gap-2">
             <span
@@ -77,12 +81,16 @@ export default async function MyPage() {
             <code className="text-fg">{user.color}</code>
           </dd>
           <dt className="text-fg-muted">인증 방식</dt>
-          <dd className="text-fg">{user.primaryAuthProvider}</dd>
+          <dd className="text-fg">
+            <ProviderBadge provider={user.primaryAuthProvider} />
+          </dd>
           <dt className="text-fg-muted">연결된 제공자</dt>
           <dd className="flex flex-wrap items-center gap-2 text-fg">
-            <span>
-              {user.linkedProviders.length === 0 ? '없음' : user.linkedProviders.join(', ')}
-            </span>
+            {user.linkedProviders.length === 0 ? (
+              <span>없음</span>
+            ) : (
+              user.linkedProviders.map((p) => <ProviderBadge key={p} provider={p} />)
+            )}
             {canConnectGoogle && (
               <GoogleSignInButton
                 label="Google 계정 연결"
