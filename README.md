@@ -41,6 +41,7 @@
 | 2026-05-08 | D-010 | Realtime 드라이버 *(O-008 해결)* | **Supabase Realtime broadcast + presence** (tldraw store diff, last-write-wins) |
 | 2026-05-11 | D-011 | 캔버스 색상 — **전체 도형 임의 색** | tldraw `shape.meta.customColor` 에 hex 저장, 각 ShapeUtil `.configure({ getCustomDisplayValues })` 로 렌더 override. 기본 팔레트 + HTML color picker 병행 ([§ 17.5](DESIGN.md#175-d-011-임의-색상-지원-구현-메모)) |
 | 2026-05-11 | D-012 | **라이트 모드 추가** | `html[data-theme]` CSS 변수 분기. system preference 감지 + localStorage + cookie. 헤더 sun/moon 토글. 스토리(화이트보드) 페이지는 다크 고정. accent 컬러 공유 |
+| 2026-05-12 | D-013 | **Google SSO 활성화** *(O-012/O-016 부분 해결)* | `google-provider.ts` 어댑터 + `/auth/callback`. 익명 트랙 병행 유지. 닉네임은 별도 입력. 익명 흔적은 Google 계정에 흡수 |
 
 ### ⏳ 미해결 (사용자 검토 대기)
 
@@ -48,11 +49,11 @@
 | --- | --- | --- | --- |
 | ~~O-008~~ | ~~Realtime 드라이버~~ | **✅ D-010 으로 해결** | Supabase Realtime 채택 |
 | O-009 | **썸네일 생성 방식** (클라이언트 캡처 vs 서버 puppeteer) | Phase 2 또는 Phase 5 | Channel Guide 페이지의 스토리 카드 미리보기 그림 용도 |
-| O-012 | **SSO 우선순위** (Google만 / Google+GitHub / 4종) | Phase 7 시작 전 | |
+| ~~O-012~~ | ~~SSO 우선순위~~ | **✅ D-013 부분 해결 (Google 채택)** | GitHub/Microsoft/Apple 등은 별도 결정 |
 | O-013 | **Google Workspace 통합 깊이** | Phase 8 시작 전 | |
 | O-014 | **이메일 발신자 표기** | Phase 9 도메인 인증 시 | |
 | O-015 | **채널 권한 시스템** (수정 권한 요청·알림·대표 이미지) | MVP 후 또는 인증 결정 후 | C 그룹 검토 후 보류 — D-EMAIL 뒤집기 필요. Could 항목 |
-| O-016 | **인증 방식 — 이메일 대신 다른 방식** | O-012 와 함께 | 사용자 의사: 이메일 매직링크 대신 SSO 또는 다른 방식 |
+| ~~O-016~~ | ~~인증 방식 — 이메일 대신 다른 방식~~ | **✅ D-013 부분 해결 (Google SSO)** | 이메일 매직링크는 D-EMAIL 로 Phase 9 까지 보류 |
 
 ---
 

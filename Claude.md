@@ -422,6 +422,7 @@ ExternalIntegration {
 | 2026-05-08 | D-010 | Realtime 드라이버 (O-008 해결) | **Supabase Realtime broadcast + presence** + tldraw store diff (last-write-wins). Yjs는 후속 마이그레이션. | §8 (Yjs + y-websocket 명시 → Supabase Realtime 채택) |
 | 2026-05-11 | D-011 | 캔버스 색상 — **전체 도형 임의 색** | tldraw `shape.meta.customColor` 에 hex 저장, 각 ShapeUtil `.configure({ getCustomDisplayValues })` 로 렌더 override. `<Tldraw components={{StylePanel}}>` 로 HTML color picker section 추가. 구현 메모는 [`DESIGN.md` § 17.5](DESIGN.md#175-d-011-임의-색상-지원-구현-메모). | §5 ("색상·굵기 변경" Should 항목을 임의 색까지 확장) |
 | 2026-05-11 | D-012 | **라이트 모드 추가** (다크는 default) | `html[data-theme]` 으로 CSS 변수 분기. system preference 자동 감지 + localStorage + cookie 영속. 헤더에 sun/moon 토글. **스토리(화이트보드) 페이지는 다크 고정** (사용자 명시 요청). accent 컬러는 두 모드 공유. | §2 ("다크 모드 우선" → "다크 default + 라이트 선택 가능" 으로 완화) |
+| 2026-05-12 | D-013 | **Google SSO 활성화** (O-012/O-016 부분 해결) | provider abstraction 의 `google-provider.ts` 활성. `signInWithOAuth({ provider: 'google' })` + `/auth/callback`. 익명 트랙은 그대로 유지 — 두 트랙 병행. Google 로그인 후 닉네임은 별도 입력 단계 (`/auth/setup-nickname`) — 익명과 동일 UX. **익명 흔적은 Google 계정에 흡수** (`anonymous_sessions.converted_user_id` + 데이터 transfer). | §11 (Phase 7 SSO 를 일부 조기 도입) |
 
 ### A.2 미해결 결정 (Open)
 
@@ -429,11 +430,11 @@ ExternalIntegration {
 | --- | --- | --- | --- |
 | ~~O-008~~ | ~~Realtime 드라이버~~ | **D-010 으로 해결 (Supabase Realtime 채택)** | Phase 4 진입 시 결정 |
 | O-009 | 썸네일 생성 방식 | Phase 2 또는 Phase 5 | "어느 부분을 말하는지 모르겠음" → README "결정 이력" 섹션에 용도 설명 보강됨 |
-| O-012 | SSO 우선순위 (Google만 / Google+GitHub / 4종) | Phase 7 시작 전 | |
+| ~~O-012~~ | ~~SSO 우선순위~~ | **부분 해결: D-013 (Google SSO 활성화)** | GitHub/Microsoft/Apple 등 추가 SSO 는 별도 결정 필요 |
 | O-013 | Google Workspace 통합 깊이 | Phase 8 시작 전 | |
 | O-014 | 이메일 발신자 표기 (`noreply@` / `hello@` / `studio@`) | Phase 9 도메인 인증 시 | |
 | O-015 | **채널 권한 시스템** (수정 권한 요청/부여, 알림 inbox, 익명/로그인 구분, 대표 이미지) | MVP 후 또는 인증 방식 결정 후 | C 그룹 검토했으나 D-EMAIL 뒤집기 필요 + 작업량 큼 → MVP Phase 5 다른 항목 우선. CLAUDE.md §5 의 "Could (확장)" 와 일관 |
-| O-016 | **인증 방식 — 이메일 매직 링크 대신 다른 방식 검토** | O-012 결정과 함께 또는 Phase 7 | 사용자 명시 의사: "이메일 대신 다른 인증 방식". Google SSO 우선 여부는 O-012 와 묶어서 결정 |
+| ~~O-016~~ | ~~인증 방식 — 이메일 매직 링크 대신 다른 방식 검토~~ | **부분 해결: D-013 (Google SSO 채택)** | 이메일 매직 링크는 D-EMAIL 로 Phase 9 까지 보류, 그 대안으로 Google SSO 가 채워짐 |
 
 ### A.3 결정 이력 갱신 규칙
 

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Wordmark } from '@/components/brand/Wordmark';
 import { NicknameForm } from '@/components/auth/NicknameForm';
+import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
 import { SignedInBanner } from '@/components/auth/SignedInBanner';
 import { SetupBanner } from '@/components/auth/SetupBanner';
 import { CreateChannelForm } from '@/components/channel/CreateChannelForm';
@@ -55,10 +56,19 @@ export default async function LandingPage() {
           </section>
         </>
       ) : (
-        <section className="flex flex-col items-center gap-6">
+        <section className="flex w-full flex-col items-center gap-6">
           <NicknameForm />
+          {providers.includes('google') && (
+            <>
+              <div className="flex w-full max-w-sm items-center gap-3">
+                <span className="h-px flex-1 bg-divider" />
+                <span className="text-xs text-fg-muted">또는</span>
+                <span className="h-px flex-1 bg-divider" />
+              </div>
+              <GoogleSignInButton className="w-full max-w-sm" />
+            </>
+          )}
           {/* TODO[Phase9-Email]: providers.includes('email') 시 MagicLinkForm 노출 */}
-          {/* TODO[Phase7]: providers.includes('google') 시 GoogleSignInButton 노출 */}
           <p className="text-xs text-fg-muted">현재 활성 인증: {providers.join(', ')}</p>
         </section>
       )}
