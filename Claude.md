@@ -421,6 +421,7 @@ ExternalIntegration {
 | 2026-05-08 | D-EMAIL | 이메일 매직 링크 활성화 시점 | **Phase 9로 이동** (커스텀 도메인 + Resend DKIM/SPF와 묶음). MVP는 익명 트랙만 활성화. | §4, §5, §11 (Phase 1에서 email 활성 → Phase 9로 이동) |
 | 2026-05-08 | D-010 | Realtime 드라이버 (O-008 해결) | **Supabase Realtime broadcast + presence** + tldraw store diff (last-write-wins). Yjs는 후속 마이그레이션. | §8 (Yjs + y-websocket 명시 → Supabase Realtime 채택) |
 | 2026-05-11 | D-011 | 캔버스 색상 — **전체 도형 임의 색** | tldraw `shape.meta.customColor` 에 hex 저장, 각 ShapeUtil `.configure({ getCustomDisplayValues })` 로 렌더 override. `<Tldraw components={{StylePanel}}>` 로 HTML color picker section 추가. 구현 메모는 [`DESIGN.md` § 17.5](DESIGN.md#175-d-011-임의-색상-지원-구현-메모). | §5 ("색상·굵기 변경" Should 항목을 임의 색까지 확장) |
+| 2026-05-11 | D-012 | **라이트 모드 추가** (다크는 default) | `html[data-theme]` 으로 CSS 변수 분기. system preference 자동 감지 + localStorage + cookie 영속. 헤더에 sun/moon 토글. **스토리(화이트보드) 페이지는 다크 고정** (사용자 명시 요청). accent 컬러는 두 모드 공유. | §2 ("다크 모드 우선" → "다크 default + 라이트 선택 가능" 으로 완화) |
 
 ### A.2 미해결 결정 (Open)
 

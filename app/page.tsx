@@ -5,6 +5,7 @@ import { SignedInBanner } from '@/components/auth/SignedInBanner';
 import { SetupBanner } from '@/components/auth/SetupBanner';
 import { CreateChannelForm } from '@/components/channel/CreateChannelForm';
 import { ChannelList } from '@/components/channel/ChannelList';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { listMyChannels } from '@/lib/usecases/list-my-channels';
 import { isSupabaseConfigured } from '@/lib/config/env';
@@ -26,14 +27,17 @@ export default async function LandingPage() {
     >
       <header className="flex items-start justify-between gap-4">
         <Wordmark size="md" withTagline={!user} />
-        {user && (
-          <Link
-            href="/me"
-            className="text-xs text-fg-muted underline-offset-4 hover:text-fg hover:underline"
-          >
-            마이페이지
-          </Link>
-        )}
+        <div className="flex items-center gap-3">
+          {user && (
+            <Link
+              href="/me"
+              className="text-xs text-fg-muted underline-offset-4 hover:text-fg hover:underline"
+            >
+              마이페이지
+            </Link>
+          )}
+          <ThemeToggle />
+        </div>
       </header>
 
       {!supabaseReady && <SetupBanner />}

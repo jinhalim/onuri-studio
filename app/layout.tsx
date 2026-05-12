@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { env } from '@/lib/config/env';
+import { themeBootstrapScript } from '@/components/theme/theme-script';
 
 // 모바일/태블릿 (iPad 포함) 최적화 — Phase 6.
 // - viewport-fit: cover → iPhone notch / iPad home indicator 안전영역 활용
@@ -34,7 +35,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
+      <head>
+        {/* 첫 paint 전 html[data-theme] 설정 → 다크/라이트 flash 방지.
+            D-012: 라이트 모드 도입 (다크 default, system preference 자동 감지). */}
+        <script
+          dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   );

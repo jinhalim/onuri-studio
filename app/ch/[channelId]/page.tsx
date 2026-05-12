@@ -4,6 +4,7 @@ import { Wordmark } from '@/components/brand/Wordmark';
 import { SignedInBanner } from '@/components/auth/SignedInBanner';
 import { ChannelStoriesSection } from '@/components/channel/ChannelStoriesSection';
 import { ShareButton } from '@/components/share/ShareButton';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { getChannelWithStories } from '@/lib/usecases/get-channel-with-stories';
 import { recordParticipation } from '@/lib/usecases/record-participation';
@@ -48,7 +49,10 @@ export default async function ChannelGuidePage({ params }: ChannelGuidePageProps
         <Link href="/" className="hover:opacity-80">
           <Wordmark size="sm" />
         </Link>
-        {user && <SignedInBanner user={user} compact />}
+        <div className="flex items-center gap-3">
+          {user && <SignedInBanner user={user} compact />}
+          <ThemeToggle />
+        </div>
       </header>
 
       <section className="flex flex-col gap-3">

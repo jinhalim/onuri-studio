@@ -5,22 +5,24 @@
 /* ================================================================
    Onuri Studio 디자인 토큰 — CSS 변수
    lib/design-tokens/tokens.ts 와 동기 유지 필수.
+   D-012: 다크 모드 default + 라이트 모드 선택 가능.
+   html[data-theme="light"] 분기로 토큰 재정의.
    ================================================================ */
 :root {
-  /* 배경 */
+  /* 배경 (다크) */
   --bg-bezel:      #0B0B0F;
   --bg-screen:     #16161D;
   --bg-surface:    #1F1F2A;
 
-  /* 텍스트 */
+  /* 텍스트 (다크) */
   --text-primary:  #F5F5F7;
   --text-muted:    #9A9AA8;
 
-  /* 액센트 */
+  /* 액센트 — 두 모드 공유 (브랜드 식별성 유지) */
   --accent-rec:    #FF3D5A;
   --accent-live:   #4FD1C5;
 
-  /* 구분선 */
+  /* 구분선 (다크) */
   --divider:       #2A2A38;
 
   /* 라운딩 */
@@ -32,6 +34,22 @@
   --transition-default: 200ms cubic-bezier(0.16, 1, 0.3, 1);
 
   color-scheme: dark;
+}
+
+html[data-theme='light'] {
+  /* 배경 (라이트) — 순백 대신 약간 따뜻한 off-white 로 눈 피로 완화 */
+  --bg-bezel:      #FFFFFF;
+  --bg-screen:     #F7F7FA;
+  --bg-surface:    #ECECF2;
+
+  /* 텍스트 (라이트) — 강한 검정 대신 진한 청회색 (가독성 + 부드러움) */
+  --text-primary:  #16161D;
+  --text-muted:    #5A5A6B;
+
+  /* 구분선 (라이트) */
+  --divider:       #D8D8E0;
+
+  color-scheme: light;
 }
 
 @layer base {

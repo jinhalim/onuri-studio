@@ -4,6 +4,7 @@ import { Wordmark } from '@/components/brand/Wordmark';
 import { SignedInBanner } from '@/components/auth/SignedInBanner';
 import { ChannelList } from '@/components/channel/ChannelList';
 import { HistoryChannelCard } from '@/components/me/HistoryChannelCard';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { listMyChannels } from '@/lib/usecases/list-my-channels';
 import { getMyHistory } from '@/lib/usecases/get-my-history';
@@ -37,7 +38,10 @@ export default async function MyPage() {
         <Link href="/" className="hover:opacity-80">
           <Wordmark size="sm" />
         </Link>
-        <SignedInBanner user={user} compact />
+        <div className="flex items-center gap-3">
+          <SignedInBanner user={user} compact />
+          <ThemeToggle />
+        </div>
       </header>
 
       <section className="flex flex-col gap-2">

@@ -941,6 +941,7 @@ provider.destroy() + 마지막 스냅샷 flush
 | 2026-05-08 | D-009 | Yjs 스냅샷 보존 정책 | **일별 1개 + 직전 5개 롤링** | 500MB 무료 티어 안전 + 즉시 롤백 + 장기 백업 균형 |
 | 2026-05-08 | D-010 | Realtime 드라이버 (O-008 해결) | **Supabase Realtime broadcast + presence** (tldraw store diff, last-write-wins) | 별도 WebSocket 인프라 불필요. Yjs CRDT는 후속 마이그레이션으로 점진 전환 가능 (같은 채널에 메시지 타입 추가). MVP 동시 편집 충돌은 last-write-wins 으로 수용. |
 | 2026-05-11 | D-011 | 캔버스 색상 — **전체 도형 임의 색** | tldraw `shape.meta.customColor` 에 hex 저장, 각 ShapeUtil `.configure({ getCustomDisplayValues })` 로 렌더 override. 커스텀 StylePanel 에 HTML color picker section 추가. 구현 메모 [§ 17.5](#175-d-011-임의-색상-지원-구현-메모). | tldraw v5 의 `colorStyle` enum 제약을 schema 변경 없이 우회. 기본 팔레트 + 임의 색 병행. sticky note 작은 화면 hit-box 버그 회피로 함께 해결. |
+| 2026-05-11 | D-012 | **라이트 모드 추가** | `html[data-theme="light"]` CSS 변수 분기로 다크 13색 → 라이트 대응색 정의. `<head>` 인라인 bootstrap 스크립트로 first paint 전 적용 (flash 방지). 영속화: localStorage('theme') + cookie('theme'). 헤더에 sun/moon `ThemeToggle`. 스토리(화이트보드) 페이지는 `ForceDarkTheme` 으로 다크 강제. accent (`--accent-rec`, `--accent-live`) 두 모드 공유. | CLAUDE.md §2 의 "다크 모드 우선" 을 "다크 default + 라이트 선택 가능" 으로 완화. tldraw 캔버스 자체는 이미 자체 colorMode 가지므로 dark 고정으로 충돌 회피. |
 
 ### 17.2 D-007 색상 충돌 회피 알고리즘 상세
 

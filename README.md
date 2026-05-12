@@ -40,6 +40,7 @@
 | 2026-05-08 | D-009 | Yjs 스냅샷 보존 | **일별 1개 + 직전 5개 롤링** ([§ 17.3](DESIGN.md#173-d-009-스냅샷-보존-구현-메모)) |
 | 2026-05-08 | D-010 | Realtime 드라이버 *(O-008 해결)* | **Supabase Realtime broadcast + presence** (tldraw store diff, last-write-wins) |
 | 2026-05-11 | D-011 | 캔버스 색상 — **전체 도형 임의 색** | tldraw `shape.meta.customColor` 에 hex 저장, 각 ShapeUtil `.configure({ getCustomDisplayValues })` 로 렌더 override. 기본 팔레트 + HTML color picker 병행 ([§ 17.5](DESIGN.md#175-d-011-임의-색상-지원-구현-메모)) |
+| 2026-05-11 | D-012 | **라이트 모드 추가** | `html[data-theme]` CSS 변수 분기. system preference 감지 + localStorage + cookie. 헤더 sun/moon 토글. 스토리(화이트보드) 페이지는 다크 고정. accent 컬러 공유 |
 
 ### ⏳ 미해결 (사용자 검토 대기)
 

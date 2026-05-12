@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { Wordmark } from '@/components/brand/Wordmark';
 import { SignedInBanner } from '@/components/auth/SignedInBanner';
 import { RelativeTime } from '@/components/shared/RelativeTime';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { getAdminDashboard } from '@/lib/usecases/get-admin-dashboard';
 
@@ -29,7 +30,10 @@ export default async function AdminPage() {
         <Link href="/" className="hover:opacity-80">
           <Wordmark size="sm" />
         </Link>
-        <SignedInBanner user={user} compact />
+        <div className="flex items-center gap-3">
+          <SignedInBanner user={user} compact />
+          <ThemeToggle />
+        </div>
       </header>
 
       <section className="flex flex-col gap-2">

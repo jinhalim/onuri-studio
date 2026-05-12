@@ -9,6 +9,7 @@ import { StoryTitleInline } from '@/components/story/StoryTitleInline';
 import { LaserShareToggle, type LaserShareMode } from '@/components/story/LaserShareToggle';
 import { ExportButton } from '@/components/story/ExportButton';
 import { ShareButton } from '@/components/share/ShareButton';
+import { ForceDarkTheme } from '@/components/theme/ForceDarkTheme';
 import {
   StudioCanvas,
   type SaveState,
@@ -289,6 +290,8 @@ export function StoryWorkspace({
 
   return (
     <main className="flex h-dvh flex-col">
+      {/* 스토리 페이지는 다크 고정 (사용자 명시 요청). 떠나면 이전 테마로 복원. */}
+      <ForceDarkTheme />
       <header
         className="flex flex-wrap items-center justify-between gap-2 border-b border-divider bg-brand-bezel px-4 py-2 sm:gap-3 sm:px-6 sm:py-3"
         style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}
