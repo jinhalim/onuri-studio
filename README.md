@@ -64,13 +64,14 @@
 ## 📊 전체 진행률
 
 ```
-전체:        [██████████████░░░░░░]  68%   (~6.1 / 9 phases)
-MVP (1~6):   [███████████████████░]  95%   (~5.7 / 6 phases)
+전체:        [███████████████░░░░░]  73%   (~6.5 / 9 phases)
+MVP (1~6):   [████████████████████]  98%   (~5.9 / 6 phases)
 확장 (7~9):  [██░░░░░░░░░░░░░░░░░░]  13%   (~0.4 / 3 phases)
 ```
 
 > 위 바는 Phase 단위. 한 Phase 안의 세부 체크리스트는 [§ Phase별 체크리스트](#-phase별-체크리스트) 참조.
 > **최근 적용 결정** (2026-05-13): D-013 Google SSO · D-014 사용자 유형별 권한 · D-015 수정 권한 요청 · D-016 tldraw 라이선스 + Editor abstraction L1 · D-017 Sync hardening + 25명 정원.
+> **인프라**: Vercel 스테이징 배포 완료 ([onuri-studio.vercel.app](https://onuri-studio.vercel.app)). Supabase 무료 티어 사용량은 `/admin` 페이지에서 실시간 확인 가능.
 
 ---
 
@@ -107,7 +108,7 @@ gantt
 | 3     | 단일 사용자 화이트보드 + 자동 저장            | ✅ 완료 | `[██████████] 100%` |
 | 4     | Realtime 동기화 + Presence + On Air           | ✅ 완료* | `[██████████] 100%` |
 | 5     | 내보내기/가져오기 + 관리자                    | ✅ 완료 | `[██████████] 100%` |
-| 6     | 보안 강화 + 모바일 + 스테이징                 | 🟢 진행 | `[███████░░░]  70%` |
+| 6     | 보안 강화 + 모바일 + 스테이징                 | 🟢 진행 | `[█████████░]  90%` |
 | 7     | Google SSO *(확장)*                           | 🟢 진행 | `[███░░░░░░░]  30%` |
 | 8     | Google Workspace 연계 *(확장)*                | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
 | 9     | 이메일 매직 링크 + 도메인 + 프로덕션 *(확장)* | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
@@ -247,7 +248,9 @@ gantt
 - [x] 가져오기 (드래그앤드롭 + 파일 선택, `import-story.ts` 액션)
 - [x] Import 시 병합/새 스토리 선택 다이얼로그
 - [x] 마이페이지 히스토리 (최근 방문 / 즐겨찾기 `getMyHistory`, `FavoriteToggle`)
+- [x] **마이페이지 권한 이력 섹션** (D-015 후속) — 받은 / 부여한 권한 + 해제 기능
 - [x] `/admin` 통계 페이지 (role=admin guard, `getAdminDashboard`)
+- [x] **`/admin` Supabase 무료 티어 사용량 표시** — DB 용량 추정 / Auth 사용자 / 테이블별 row + Dashboard 링크
 - [x] 사용자/채널/스토리 검색 (admin)
 - [x] **D-014 적용**: 익명 + 비-owner 채널에선 ExportButton 숨김
 
@@ -258,7 +261,7 @@ gantt
 
 - [x] RLS 정책 적용 (migration 0004 + 0010 — stories / channels / participations / users / story_permissions / notifications)
 - [x] middleware 로 익명 사용자 URL 접속 가드 + next 보존 (D-014)
-- [x] 닉네임 / 채널명 / 스토리 제목 XSS 위험 문자 거부 (validators)
+- [x] 닉네임 / 채널명 / 스토리 제목 XSS 위험 문자 거부 (validators — `<>` 등 거부 + React JSX 자동 escape 콤보로 3중 방어)
 - [x] open redirect 방지 (sign-in 액션 next 파라미터 검증)
 - [x] 모바일/태블릿 safe-area + viewport + 헤더 wrap 대응
 - [x] 라이트/다크 모드 (D-012) — system preference 자동 감지 + 영속화
@@ -266,12 +269,12 @@ gantt
 - [x] **D-015 스토리 단위 수정 권한 요청/승인**
 - [x] **D-016 tldraw Hobby License attribution + Editor abstraction L1**
 - [x] **D-017 Realtime sync hardening + per-story 25명 정원 제한**
-- [ ] Rate Limit 적용 (채널 5/분, 스토리 20/분 등) — Redis 또는 Vercel KV
-- [ ] DOMPurify 로 XSS 방어 강화
-- [ ] 파일 업로드 magic byte 재검증 (.onuri.json import 시 MIME / 사이즈 외 추가 검사)
-- [ ] Service Role 키 클라이언트 번들 차단 (ESLint custom rule)
+- [x] **Rate Limit 적용** — Supabase Postgres 기반 (`rate_limit_counters` migration 0011, $0 예산). 채널 생성 5회/분, 스토리 생성 20회/분, 권한 요청 5회/분
+- [x] **ESLint custom rules** — `tldraw` 직접 import 금지 (D-016 강제) + `@/lib/infra/supabase/admin` 클라이언트 import 차단 + `SUPABASE_SERVICE_ROLE_KEY` 클라이언트 참조 차단
+- [x] **Vercel 스테이징 배포** (`onuri-studio.vercel.app`) — 환경변수 8종 등록 완료 (Google SSO 키 포함). tldraw 라이선스 키만 발급 대기
 - [ ] WCAG AA 점검 + Lighthouse 모바일/접근성 90+
-- [ ] Vercel 스테이징 배포 (`onuri-studio.vercel.app`)
+- [ ] *(조건부)* DOMPurify — 현재 코드 surface 에선 불필요 (JSX 자동 escape + zod `<>` 거부 + `dangerouslySetInnerHTML` 0건 으로 이미 안전). 향후 markdown / rich text / 댓글 도입 시 추가
+- [ ] *(조건부)* 파일 업로드 magic byte 재검증 — 사용자 파일 업로드 기능 본격 도입 시
 
 </details>
 
@@ -378,16 +381,21 @@ Supabase 미설정 상태에서도 dev 서버는 부팅되며, 랜딩 페이지�
 
 ### 다음 작업 우선순위 (Phase 6 마무리)
 
-1. **Vercel 스테이징 배포** — `onuri-studio.vercel.app` 에 push, env 등록
-2. **Rate Limit 적용** — Vercel KV 또는 Upstash Redis 로 채널/스토리 생성 + 매직 링크 + 알림 요청 제한
-3. **DOMPurify** — note shape 의 `meta.createdBy` / channel name 등 자유 입력 필드 보강
-4. **ESLint rule** — Service Role 키 클라이언트 번들 차단 + `tldraw` 직접 import 금지 (`@/lib/editor` 강제)
-5. **WCAG AA 점검 + Lighthouse 90+**
+1. **WCAG AA 점검 + Lighthouse 모바일/접근성 90+** — 마지막 미체크 항목
+2. *(조건부)* DOMPurify — markdown / rich text / 댓글 기능 도입 시
+3. *(조건부)* 파일 업로드 magic byte 재검증 — 사용자 파일 업로드 본격 도입 시
 
 ### 50명 동시 운영이 필요해진 시점
 
 - **Yjs CRDT 마이그레이션** — tldraw `useYjsStore` + Supabase Storage 의 Y.Doc binary 영속 ([§ 17.9](DESIGN.md#179-d-017-realtime-sync-hardening-구현-메모))
 - 현재는 D-017 의 25명 cap + Quick wins 로 운영 가능 (Overflow 발생 시 안내)
+
+### 상업 launch 시점
+
+- tldraw Hobby License → SDK License 구매 ([§ 17.7](DESIGN.md#177-tldraw-라이선스-가이드)) 또는 대안 editor 로 교체 ([§ 17.8](DESIGN.md#178-editor-교체-대비-abstraction-가이드))
+- 도메인 구매 + DNS / 프로덕션 환경변수 갱신 (Phase 9)
+- 약관 / 개인정보처리방침
+- Supabase Pro 전환 시점 판단 (`/admin` 페이지의 사용량 모니터링 활용)
 
 ---
 

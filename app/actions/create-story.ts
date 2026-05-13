@@ -5,6 +5,7 @@ import { createStory } from '@/lib/usecases/create-story';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { getChannelWithStories } from '@/lib/usecases/get-channel-with-stories';
 import { idSchema, storyTitleSchema } from '@/lib/security/validators';
+import { checkRateLimit } from '@/lib/usecases/check-rate-limit';
 
 export interface CreateStoryState {
   ok: boolean;
@@ -17,6 +18,19 @@ export async function createStoryAction(
 ): Promise<CreateStoryState> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: '먼저 닉네임으로 입장해주세요' };
+
+  // Rate limit: 스토리 생성 20회/분/사용자 (CLAUDE.md §7).
+  const rl = await checkRateLimit({
+    key: `story:create:${user.id}`,
+    maxPerWindow: 20,
+    windowMs: 60_000,
+  });
+  if (!rl.ok) {
+    return {
+      ok: false,
+      error: `스토리 생성 요청이 너무 잦아요. ${rl.retryAfterSec}초 후 다시 시도해주세요.`,
+    };
+  }
 
   const channelIdRaw = formData.get('channelId');
   const titleRaw = formData.get('title');

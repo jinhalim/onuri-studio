@@ -5,6 +5,7 @@ import { SignedInBanner } from '@/components/auth/SignedInBanner';
 import { ChannelList } from '@/components/channel/ChannelList';
 import { HistoryChannelCard } from '@/components/me/HistoryChannelCard';
 import { NicknameEditInline } from '@/components/me/NicknameEditInline';
+import { PermissionHistorySection } from '@/components/me/PermissionHistorySection';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { NotificationBell } from '@/components/notification/NotificationBell';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
@@ -13,6 +14,7 @@ import { enabledProviders } from '@/lib/infra/auth/provider-registry';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { listMyChannels } from '@/lib/usecases/list-my-channels';
 import { getMyHistory } from '@/lib/usecases/get-my-history';
+import { getMyStoryPermissions } from '@/lib/usecases/get-my-story-permissions';
 
 // 마이페이지.
 // MVP 정책: 익명도 자기 채널 목록 확인 가능 (D-007 색이 정체성 역할).
@@ -23,9 +25,10 @@ export default async function MyPage() {
   if (!user) redirect('/');
 
   // 독립적인 데이터 fetch 병렬화
-  const [myChannels, history] = await Promise.all([
+  const [myChannels, history, permissions] = await Promise.all([
     listMyChannels(user.id),
     getMyHistory(user.id),
+    getMyStoryPermissions(user.id),
   ]);
   // 본인 소유 채널은 "내가 만든 채널" 섹션에 이미 표시 → recent 에서 제외해서 중복 방지
   const myChannelIds = new Set(myChannels.map((c) => c.id));
@@ -108,6 +111,9 @@ export default async function MyPage() {
         <h2 className="text-sm font-semibold text-fg-muted">내가 만든 채널</h2>
         <ChannelList channels={myChannels} />
       </section>
+
+      {/* D-015 권한 이력 — received/granted 둘 다 비면 섹션 자체가 안 그려짐. */}
+      <PermissionHistorySection permissions={permissions} />
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-fg-muted">

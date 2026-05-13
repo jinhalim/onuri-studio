@@ -7,6 +7,67 @@
         "argsIgnorePattern": "^_",
         "varsIgnorePattern": "^_"
       }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "tldraw",
+            "message": "tldraw 는 @/lib/editor 를 통해서만 import (D-016 abstraction, DESIGN.md § 17.8)."
+          }
+        ]
+      }
     ]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["lib/editor/**/*"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["components/**/*", "app/**/*", "lib/hooks/**/*"],
+      "excludedFiles": [
+        "app/actions/**/*",
+        "app/api/**/*",
+        "app/**/route.ts",
+        "app/**/page.tsx",
+        "app/**/layout.tsx",
+        "app/**/loading.tsx",
+        "app/**/error.tsx",
+        "app/**/not-found.tsx"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "tldraw",
+                "message": "tldraw 는 @/lib/editor 를 통해서만 import (D-016 abstraction, DESIGN.md § 17.8)."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "@/lib/infra/supabase/admin",
+                  "**/lib/infra/supabase/admin"
+                ],
+                "message": "admin client (service role key) 는 server action / server-only 모듈에서만. 클라이언트 번들 노출 금지."
+              }
+            ]
+          }
+        ],
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "MemberExpression[object.object.name='process'][object.property.name='env'][property.name='SUPABASE_SERVICE_ROLE_KEY']",
+            "message": "SUPABASE_SERVICE_ROLE_KEY 는 server-only. client 파일에서 참조 금지."
+          }
+        ]
+      }
+    }
+  ]
 }

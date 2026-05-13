@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/infra/supabase/admin';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { idSchema } from '@/lib/security/validators';
 import { broadcastFromServer } from '@/lib/infra/realtime/broadcast-server';
+import { checkRateLimit } from '@/lib/usecases/check-rate-limit';
 
 // D-015: 비-owner 사용자가 특정 스토리의 수정 권한을 owner 에게 요청.
 // - 본인이 owner 면 거부.
@@ -27,6 +28,19 @@ export async function requestEditPermissionAction(
 ): Promise<RequestEditResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: '로그인이 필요해요' };
+
+  // Rate limit: 권한 요청 5회/분/사용자 — spam 방지.
+  const rl = await checkRateLimit({
+    key: `edit-request:${user.id}`,
+    maxPerWindow: 5,
+    windowMs: 60_000,
+  });
+  if (!rl.ok) {
+    return {
+      ok: false,
+      error: `요청이 너무 잦아요. ${rl.retryAfterSec}초 후 다시 시도해주세요.`,
+    };
+  }
 
   const parsed = inputSchema.safeParse({ storyId });
   if (!parsed.success) return { ok: false, error: '스토리 ID가 유효하지 않아요' };
