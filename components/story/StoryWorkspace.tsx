@@ -21,6 +21,10 @@ import { PresenceList } from '@/components/presence/PresenceList';
 import { OnAirIndicator } from '@/components/brand/OnAirIndicator';
 import { NotificationBell } from '@/components/notification/NotificationBell';
 import { OverflowNotice } from '@/components/story/OverflowNotice';
+import { GDriveAttachButton } from '@/components/story/GDriveAttachButton';
+import { GDrivePanel } from '@/components/story/GDrivePanel';
+import type { GDriveFileShape } from '@/components/canvas/gdriveShapeUtil';
+import { useValue } from '@/lib/editor';
 import {
   useStoryRealtime,
   type CursorPayload,
@@ -61,11 +65,17 @@ export function StoryWorkspace({
   shareUrl,
 }: StoryWorkspaceProps) {
   const editorRef = useRef<Editor | null>(null);
+  // D-018 PoC: gdrive panel 의 useValue 가 editor 변화를 reactive 하게 추적하려면
+  // ref 외에 state 도 필요 (ref 는 React render 트리거 안 함).
+  const [editor, setEditor] = useState<Editor | null>(null);
   const saveControlsRef = useRef<SaveControls | null>(null);
   // broadcast 함수는 useStoryRealtime 에서 반환되는데 handleReconnect 가 그것의 인자로
   // 들어가는 circular dependency 회피용 ref. 아래 useStoryRealtime 호출 후 채워진다.
   const broadcastRef = useRef<((changes: Omit<SyncPayload, 'fromUserId'>) => void) | null>(null);
   const [isDrawingLocal, setIsDrawingLocal] = useState(false);
+  // D-018 PoC: 사용자가 명시적으로 패널을 닫으면 같은 shape 재선택해도 자동 안 열림.
+  // 다른 gdrive shape 선택 시엔 다시 열림. shape.id 단위로 "닫힘 상태" 추적.
+  const [closedPanelShapeIds, setClosedPanelShapeIds] = useState<Set<string>>(() => new Set());
   const [laserShareMode, setLaserShareMode] = useState<LaserShareMode>('private');
   const [remoteLaserStrokes, setRemoteLaserStrokes] = useState<Map<string, RemoteLaserStroke>>(
     () => new Map(),
@@ -315,6 +325,40 @@ export function StoryWorkspace({
     isDrawing: isDrawingLocal,
   });
 
+  // 다른 사용자가 그리는 중 (본인 제외)
+  const someoneDrawing = presences.some(
+    (p) => p.userId !== realtimeUser.id && p.isDrawing,
+  );
+
+  // D-018 PoC: 캔버스에서 선택된 gdrive-file shape 추적 (가장 마지막에 선택된 것 1개).
+  // useValue 가 tldraw 의 reactive signal 변화에 자동 재계산 → selection 변하면 panel 갱신.
+  // type cast 이유: tldraw 의 TLShape union 은 built-in shape 만 포함 — custom 'gdrive-file' 은
+  // shapeUtils 등록으로 런타임엔 동작하지만 type 시스템엔 안 보임.
+  // ⚠ useValue 는 Hook 이라 early return 보다 반드시 위에서 호출 (rules-of-hooks).
+  const selectedGDriveShape = useValue<GDriveFileShape | null>(
+    'selected-gdrive-shape',
+    () => {
+      if (!editor) return null;
+      const selected = editor.getSelectedShapes();
+      const gdrive = selected.find((s) => (s.type as string) === 'gdrive-file');
+      return (gdrive as unknown as GDriveFileShape | undefined) ?? null;
+    },
+    [editor],
+  );
+
+  // 패널 표시 여부: 선택된 gdrive shape 있고, 사용자가 명시적으로 닫은 적 없으면 표시.
+  const panelOpen =
+    selectedGDriveShape !== null && !closedPanelShapeIds.has(selectedGDriveShape.id);
+
+  const handleClosePanel = () => {
+    if (!selectedGDriveShape) return;
+    setClosedPanelShapeIds((prev) => {
+      const next = new Set(prev);
+      next.add(selectedGDriveShape.id);
+      return next;
+    });
+  };
+
   // D-017: 정원 초과 시 캔버스 대신 안내 페이지 표시. 채널 진입 즉시 untrack 되고
   // 사용자가 "다시 시도" 버튼으로 페이지 리로드해야 입장 재시도.
   if (status === 'overflow') {
@@ -329,11 +373,6 @@ export function StoryWorkspace({
       </main>
     );
   }
-
-  // 다른 사용자가 그리는 중 (본인 제외)
-  const someoneDrawing = presences.some(
-    (p) => p.userId !== realtimeUser.id && p.isDrawing,
-  );
 
   return (
     <main className="flex h-dvh flex-col">
@@ -377,6 +416,9 @@ export function StoryWorkspace({
           <LaserShareToggle mode={laserShareMode} onChange={setLaserShareMode} />
           {/* D-014: 익명 + 비-owner 일 때는 export 불가 (남의 채널 콘텐츠 내보내기 차단).
               owner 거나 Google 회원이면 자유롭게 export 가능. */}
+          {/* D-018 PoC: 모든 접속자 (소유자 포함) 가 첨부 가능. 첨부된 카드는 broadcast 로
+              다른 사용자에게도 자동 전파. Phase 8b 부터는 권한 정책 검토 필요. */}
+          <GDriveAttachButton editorRef={editorRef} disabled={!canEdit} />
           {(canEdit || (user && !user.isAnonymous)) && (
             <ExportButton
               editorRef={editorRef}
@@ -392,27 +434,39 @@ export function StoryWorkspace({
         </div>
       </header>
 
-      <section className="flex-1 overflow-hidden">
-        <StudioCanvas
-          storyId={story.id}
-          initialSnapshotJson={initialSnapshotJson}
-          canEdit={canEdit}
-          presences={presences}
-          currentUserId={realtimeUser.id}
-          currentUserNickname={realtimeUser.nickname}
-          broadcast={broadcast}
-          broadcastLaser={broadcastLaser}
-          broadcastCursor={broadcastCursor}
-          updatePresence={updatePresence}
-          onEditorMount={(ed) => {
-            editorRef.current = ed;
-          }}
-          onLocalDrawingChange={setIsDrawingLocal}
-          laserShareMode={laserShareMode}
-          remoteLaserStrokes={remoteLaserStrokes}
-          onSaveStateChange={handleSaveStateChange}
-          onSaveControlsReady={handleSaveControlsReady}
-        />
+      {/* D-018 PoC: 캔버스 + 우측 gdrive panel split-screen.
+          panelOpen=true 일 때만 panel 표시 + 캔버스는 폭 줄어듦. */}
+      <section className="flex flex-1 overflow-hidden">
+        <div className={cn('flex-1 overflow-hidden', panelOpen && 'min-w-0')}>
+          <StudioCanvas
+            storyId={story.id}
+            initialSnapshotJson={initialSnapshotJson}
+            canEdit={canEdit}
+            presences={presences}
+            currentUserId={realtimeUser.id}
+            currentUserNickname={realtimeUser.nickname}
+            broadcast={broadcast}
+            broadcastLaser={broadcastLaser}
+            broadcastCursor={broadcastCursor}
+            updatePresence={updatePresence}
+            onEditorMount={(ed) => {
+              editorRef.current = ed;
+              setEditor(ed);
+            }}
+            onLocalDrawingChange={setIsDrawingLocal}
+            laserShareMode={laserShareMode}
+            remoteLaserStrokes={remoteLaserStrokes}
+            onSaveStateChange={handleSaveStateChange}
+            onSaveControlsReady={handleSaveControlsReady}
+          />
+        </div>
+        {panelOpen && selectedGDriveShape && (
+          <GDrivePanel
+            shape={selectedGDriveShape}
+            onClose={handleClosePanel}
+            className="w-2/5 min-w-[320px] max-w-[640px]"
+          />
+        )}
       </section>
     </main>
   );

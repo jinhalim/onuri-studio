@@ -43,17 +43,23 @@ export { useEditor, useValue } from 'tldraw';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Shape util classes — 커스텀 shape util 작성용 base class.
-// (customShapeUtils.ts 에서 `.configure({...})` 패턴으로 확장)
+// (customShapeUtils.ts 에서 `.configure({...})` 패턴으로 확장 + D-018 의 새 shape 정의용)
 // ──────────────────────────────────────────────────────────────────────────────
 export {
   ArrowShapeUtil,
   DrawShapeUtil,
+  FrameShapeUtil,
   GeoShapeUtil,
   HighlightShapeUtil,
   LineShapeUtil,
   NoteShapeUtil,
   TextShapeUtil,
   ScribbleOverlayUtil,
+  ShapeUtil,
+  BaseBoxShapeUtil,
+  Rectangle2d,
+  HTMLContainer,
+  T,
 } from 'tldraw';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -65,4 +71,6 @@ export type {
   TLShape,
   TLComponents,
   TLUiStylePanelProps,
+  TLBaseShape,
+  RecordProps,
 } from 'tldraw';

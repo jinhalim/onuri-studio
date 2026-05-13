@@ -11,6 +11,7 @@
 import {
   ArrowShapeUtil,
   DrawShapeUtil,
+  FrameShapeUtil,
   GeoShapeUtil,
   HighlightShapeUtil,
   LineShapeUtil,
@@ -18,6 +19,7 @@ import {
   TextShapeUtil,
   type TLShape,
 } from '@/lib/editor';
+import { GDriveFileShapeUtil } from './gdriveShapeUtil';
 
 const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
@@ -144,6 +146,22 @@ const CustomHighlightShapeUtil = HighlightShapeUtil.configure({
   },
 });
 
+// Frame: tldraw v5 기본은 색상 prop 없음 → 표준 팔레트 안 보임.
+// customColor 만 적용 가능. 색은 frame 의 외곽선 + 라벨 색에 반영.
+const CustomFrameShapeUtil = FrameShapeUtil.configure({
+  getCustomDisplayValues: (_editor, shape) => {
+    const hex = getCustomColor(shape);
+    if (!hex) return {};
+    return {
+      // frame display values 의 정확한 key 는 tldraw 내부 타입을 따름.
+      // 일반적 strokeColor / labelColor 키가 작동. 키가 빗나가면 효과만 미적용
+      // (런타임 에러 X — getDisplayValues 가 부분 머지).
+      strokeColor: hex,
+      labelColor: hex,
+    };
+  },
+});
+
 // <Tldraw shapeUtils={...} /> 에 그대로 넘긴다.
 // mergeArraysAndReplaceDefaults('type', ...) 가 type 기준으로 기본 util 을 덮어쓴다.
 export const customShapeUtils = [
@@ -154,4 +172,7 @@ export const customShapeUtils = [
   CustomLineShapeUtil,
   CustomTextShapeUtil,
   CustomHighlightShapeUtil,
+  CustomFrameShapeUtil,
+  // D-018: 새 shape 타입 — Drive 파일 카드.
+  GDriveFileShapeUtil,
 ];

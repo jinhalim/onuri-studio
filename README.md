@@ -46,6 +46,7 @@
 | 2026-05-13 | D-015 | **수정 권한 요청/승인 + 알림 inbox** *(O-015 부분 해결)* | **스토리 단위 / 영구 / DB 보관**. 비-owner 가 우상단 "읽기 전용" 배지 클릭 → owner 에게 `edit_request` 알림. owner 가 허용 시 `story_permissions.editor` 부여 + 요청자에게 승인 알림 → 클릭 시 페이지 리로드되며 편집 가능. Realtime push 는 broadcast 채널 `user-notifications:{userId}` (익명 사용자 Supabase 세션 부재 우회). 익명/Google 모두 동일 UX ([§ 17.6](DESIGN.md#176-d-015-수정-권한-요청-및-알림-시스템-구현-메모)) |
 | 2026-05-13 | D-016 | **tldraw Hobby License attribution + Editor abstraction L1** | 비상업적 사용 명시 (README "📜 라이선스" + 랜딩 푸터 + [§ 17.7](DESIGN.md#177-tldraw-라이선스-가이드) 라이선스 가이드). `lib/editor/index.ts` 신설로 tldraw 사용 표면 (components / hooks / shape utils / types) 한곳에 re-export. 9개 소비처는 `@/lib/editor` 만 import. 미래 editor 교체 (Excalidraw 등) 시 본 파일에 동일 시그니처 adapter 만 만들면 swap 가능 ([§ 17.8](DESIGN.md#178-editor-교체-대비-abstraction-가이드)) |
 | 2026-05-13 | D-017 | **Realtime sync hardening + per-story 정원 25명 제한** | Sync 코드 누적 흔적 정리 + 데이터 손실 핵심 케이스 차단 + 50명 대비 성능 폴리시 + 정원 cap. **Cleanup**: console.log 정리, 이중 fromUserId 안전망 제거, `flushSave`/`flushPendingSave` 통합, status 디바운스 1.5초로 단축, keepalive 45초로 늘림. **Quick wins**: Smart autosave (다른 사용자 그릴 때 연기 — owner snapshot 덮어쓰기 손실 차단), Non-destructive reconnect (replace → merge + catch-up broadcast), Broadcast throttle 50ms batching + dedupe. **50명 폴리시**: cursor 30Hz→15Hz, laser 60Hz→30Hz. **정원**: `MAX_STORY_PRESENCES = 25` — 초과 시 untrack + `OverflowNotice` 표시 (다시 시도 버튼만). 자동 재시도 없음. 50명 운영 시 Yjs CRDT 마이그레이션 필요 ([§ 17.9](DESIGN.md#179-d-017-realtime-sync-hardening-구현-메모)) |
+| 2026-05-13 | D-018 | **Google Drive 연동 — Phase 8a PoC + 8b 본격** *(O-013 부분 해결)* | **8a (PoC)**: URL paste → tldraw `gdrive-file` custom shape → 클릭 시 split-screen iframe (Sheets `/edit`, 그 외 `/preview`). OAuth/Picker/폴더 없음. **8b (본격)**: `drive.file` scope + Google Picker SDK + 폴더 자동 생성 (`onuri-studio/{채널 [id]}/{스토리 [id]}/`) + **Shortcut** (원본 보존) + 폴더 단위 anyone-with-link viewer share. **Export/Import**: `.onuri.json` 에선 `fileId` 제거 + `imported` flag, import 측은 아이콘만. **이름 변경**: 채널/스토리 rename 시 Drive 폴더도 자동 rename ([§ 17.10](DESIGN.md#1710-d-018-google-drive-연동-구현-메모)) |
 
 ### ⏳ 미해결 (사용자 검토 대기)
 
@@ -54,7 +55,7 @@
 | ~~O-008~~ | ~~Realtime 드라이버~~ | **✅ D-010 으로 해결** | Supabase Realtime 채택 |
 | O-009 | **썸네일 생성 방식** (클라이언트 캡처 vs 서버 puppeteer) | Phase 2 또는 Phase 5 | Channel Guide 페이지의 스토리 카드 미리보기 그림 용도 |
 | ~~O-012~~ | ~~SSO 우선순위~~ | **✅ D-013 부분 해결 (Google 채택)** | GitHub/Microsoft/Apple 등은 별도 결정 |
-| O-013 | **Google Workspace 통합 깊이** | Phase 8 시작 전 | |
+| ~~O-013~~ | ~~Google Workspace 통합 깊이~~ | **✅ D-018 부분 해결 (Phase 8a PoC + 8b 본격, Picker + drive.file + Shortcut)** | 양방향 동기화 / Sheets webhook 은 별도 |
 | O-014 | **이메일 발신자 표기** | Phase 9 도메인 인증 시 | |
 | ~~O-015~~ | ~~채널 권한 시스템~~ | **✅ D-015 부분 해결 (스토리 단위 수정 권한)** | 채널 단위 권한 / 대표 이미지 등은 별도 |
 | ~~O-016~~ | ~~인증 방식 — 이메일 대신 다른 방식~~ | **✅ D-013 부분 해결 (Google SSO)** | 이메일 매직링크는 D-EMAIL 로 Phase 9 까지 보류 |
@@ -70,7 +71,7 @@ MVP (1~6):   [████████████████████]  98%
 ```
 
 > 위 바는 Phase 단위. 한 Phase 안의 세부 체크리스트는 [§ Phase별 체크리스트](#-phase별-체크리스트) 참조.
-> **최근 적용 결정** (2026-05-13): D-013 Google SSO · D-014 사용자 유형별 권한 · D-015 수정 권한 요청 · D-016 tldraw 라이선스 + Editor abstraction L1 · D-017 Sync hardening + 25명 정원.
+> **최근 적용 결정** (2026-05-13): D-013 Google SSO · D-014 사용자 유형별 권한 · D-015 수정 권한 요청 · D-016 tldraw 라이선스 + Editor abstraction L1 · D-017 Sync hardening + 25명 정원 · D-018 Google Drive 연동 (Phase 8a PoC 시작).
 > **인프라**: Vercel 스테이징 배포 완료 ([onuri-studio.vercel.app](https://onuri-studio.vercel.app)). Supabase 무료 티어 사용량은 `/admin` 페이지에서 실시간 확인 가능.
 
 ---

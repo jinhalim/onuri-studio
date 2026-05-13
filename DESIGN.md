@@ -947,6 +947,7 @@ provider.destroy() + 마지막 스냅샷 flush
 | 2026-05-13 | D-015 | **수정 권한 요청/승인 + 알림 inbox** (O-015 부분 해결) | **스토리 단위 / 영구 / DB 보관**. 비-owner 사용자(익명 닉네임 또는 Google) 가 스토리 페이지 우상단 "읽기 전용" 배지를 클릭 → `requestEditPermissionAction` → owner 의 inbox 에 `edit_request` 알림 INSERT + broadcast push. owner 가 알림 클릭 → `EditRequestDialog` (허용/차단) → 허용 시 `story_permissions` 에 `(story_id, user_id, role='editor')` upsert + 요청자에게 `edit_request_approved` 알림. 요청자가 그 알림 클릭 → `window.location.assign` 으로 전체 페이지 리로드 → `canEdit = isOwner \|\| hasStoryEditPermission` 재계산 → 편집 모드. 구현 메모 [§ 17.6](#176-d-015-수정-권한-요청-및-알림-시스템-구현-메모). | CLAUDE.md §5 "Could" 채널 권한 시스템 중 가장 핵심인 "수정 권한 요청/부여" 만 스토리 단위로 도입. 채널 단위 권한 / 대표 이미지 등은 별도 결정 필요. |
 | 2026-05-13 | D-016 | **tldraw Hobby License attribution + Editor abstraction L1** | **라이선스 attribution**: README "📜 라이선스" 섹션 + [§ 17.7](#177-tldraw-라이선스-가이드) 라이선스 가이드 + 랜딩 페이지 푸터 ("Built with tldraw (Hobby License) · Non-commercial use only"). **L1 abstraction**: `lib/editor/index.ts` 신설로 tldraw 의 사용 표면 (components / hooks / shape utils / types) 을 한곳에 명시적 re-export. 9개 캔버스 관련 소비처는 `@/lib/editor` 만 import → tldraw 직접 import 는 `lib/editor/index.ts` + StudioCanvas CSS side-effect 두 곳만 남음. 미래 editor 교체 (Excalidraw / 자체 canvas 등) 검토 시 본 파일에 동일 시그니처 adapter 작성으로 swap 가능. 구현 메모 [§ 17.8](#178-editor-교체-대비-abstraction-가이드). | CLAUDE.md §13 ("예산 $0", "MIT 호환 라이선스 우선") 의 운영 가이드 구체화. 상업화 결정 시점에 SDK License 구매 OR alternative editor 로 swap. |
 | 2026-05-13 | D-017 | **Realtime sync hardening + per-story 정원 제한** | 누적된 sync 코드 정리 + 데이터 손실 quick wins + 50명 대비 throttle 조정 + 정원 cap. 구현 메모 [§ 17.9](#179-d-017-realtime-sync-hardening-구현-메모). | CLAUDE.md §8 (Realtime D-010) + §9 ("한 스토리당 20명") 갱신 — 25명 cap + 50명 운영 시 Yjs CRDT 이행. |
+| 2026-05-13 | D-018 | **Google Drive 연동 시작 — Phase 8a PoC + 8b 본격** (O-013 부분 해결) | Phase 8 단계적 진입. **8a (PoC)**: URL paste → tldraw `gdrive-file` custom shape → 클릭 시 split-screen iframe. OAuth/Picker/폴더 모두 미적용. **8b (본격)**: `drive.file` scope + Google Picker SDK + 폴더 자동 생성 (`onuri-studio/{채널 [id]}/{스토리 [id]}/`, idempotent, name 변경 시 자동 rename) + Shortcut (원본 위치 보존) + 폴더 단위 anyone-with-link viewer share. **Export/Import**: `.onuri.json` 에선 `fileId` 제거 + `imported` flag, import 측은 아이콘만 표시. 구현 메모 [§ 17.10](#1710-d-018-google-drive-연동-구현-메모). | CLAUDE.md §5 "Could" Google Workspace 연계 시작. §11 Phase 8 첫 결정. |
 
 ### 17.2 D-007 색상 충돌 회피 알고리즘 상세
 
@@ -1054,7 +1055,7 @@ public.notifications (
 | ~~O-008~~ | ~~Realtime 드라이버~~ | **D-010 으로 해결 (Supabase Realtime 채택)** | |
 | O-009 | 썸네일 생성 방식 (클라이언트 캡처 vs 서버 puppeteer) | Phase 2 또는 Phase 5 | 사용자 추가 설명 요청 → README "결정 이력" 섹션에 설명 보강 |
 | O-012 | SSO 우선순위 (Google만 / Google+GitHub / 4종) | Phase 7 시작 전 | |
-| O-013 | Google Workspace 통합 깊이 (임베드만 / 양방향 / 전체 동기화) | Phase 8 시작 전 | |
+| ~~O-013~~ | ~~Google Workspace 통합 깊이~~ | **D-018 부분 해결 (Phase 8a PoC + 8b 본격: Picker + drive.file + Shortcut + 폴더 자동 생성)** | 양방향 동기화 / Sheets webhook 은 별도 |
 | O-014 | 이메일 발신자 표기 (`noreply@` / `hello@` / `studio@`) | Phase 9 도메인 인증 시 | |
 | ~~O-015~~ | ~~채널 권한 시스템~~ | **D-015 부분 해결 (스토리 단위 수정 권한 요청/승인)** | 채널 단위 권한 / 대표 이미지 등은 별도 결정 필요 |
 | O-016 | 인증 방식 — 이메일 매직 링크 대신 다른 방식 (SSO 등) 검토 | O-012 와 함께 | 사용자 의사로 이메일 매직 링크 활성화 보류 |
@@ -1250,6 +1251,108 @@ D-017 적용 후 안정 운영 가능 범위는 **20~30명 정도**. 50명 운�
 - 또는 **상업 매니지드 서비스** — Liveblocks / tldraw sync cloud 등 (상업화 시점에 검토).
 
 이행 시 D-017 의 quick wins (A1/A2/A3) 와 정원 cap 은 일부 제거 가능 (CRDT 가 본질적으로 대체).
+
+### 17.10 D-018 Google Drive 연동 구현 메모
+
+#### Phase 분리
+
+| Phase | 목적 | 작업량 | 포함 |
+| --- | --- | --- | --- |
+| **8a (PoC)** | UX 검증 | 2~3일 | tldraw custom shape `gdrive-file` + URL paste + split-screen iframe |
+| **8b (본격)** | 사용자 묘사 그대로 | 1~2주 | OAuth scope 확장 + Picker SDK + 폴더 자동 생성/rename + Shortcut + 권한 share + Export/Import 처리 |
+
+#### Phase 8a 구체 — Drive API 호출 0건
+
+1. **새 shape util** `components/canvas/gdriveShapeUtil.tsx`:
+   - `BaseBoxShapeUtil` 확장
+   - props: `{ w, h, fileId, fileName, mimeType, imported }`
+   - render: mime type 기반 lucide 아이콘 + 파일명 라벨
+2. **URL parser** `lib/usecases/parse-gdrive-url.ts`:
+   - Drive 공유 URL 에서 file ID + mime type 추출
+   - 형식들: `https://docs.google.com/spreadsheets/d/{id}/edit`, `https://drive.google.com/file/d/{id}/view`, `https://docs.google.com/document/d/{id}/edit` 등
+3. **첨부 UI**: StoryWorkspace 헤더에 "Drive 파일 첨부" 버튼 → 모달 → URL 입력 → `editor.createShape({ type: 'gdrive-file', ... })`
+4. **Split-screen 패널**: 캔버스 우측에 slide-in 패널. 선택된 gdrive shape 이 있으면 그 파일의 iframe 표시.
+   - Sheets: `https://docs.google.com/spreadsheets/d/{id}/edit`
+   - Docs: `https://docs.google.com/document/d/{id}/edit`
+   - Slides: `https://docs.google.com/presentation/d/{id}/edit`
+   - 그 외: `https://drive.google.com/file/d/{id}/preview`
+5. **권한 처리**: iframe 자체 권한 화면이 fallback (Google 안내). 우리는 검증 안 함.
+
+#### Phase 8b 구체 — Drive API 본격
+
+1. **DB migration 0012**:
+   ```sql
+   alter table public.users    add column gdrive_root_folder_id text;
+   alter table public.channels add column gdrive_folder_id text;
+   alter table public.stories  add column gdrive_folder_id text;
+
+   create table public.gdrive_attachments (
+     id uuid primary key default gen_random_uuid(),
+     story_id text not null references stories(id) on delete cascade,
+     gdrive_file_id text not null,       -- 원본 파일 ID
+     shortcut_file_id text not null,      -- 우리 폴더의 shortcut ID
+     file_name text not null,
+     mime_type text not null,
+     attached_by uuid references users(id) on delete set null,
+     attached_at timestamptz default now(),
+     unique (story_id, gdrive_file_id)
+   );
+
+   -- external_integrations 활성 (CLAUDE.md §6 에 예약)
+   -- 이미 0003 에 정의됨, 본 migration 에서 access_token_encrypted 컬럼 추가/암호화 키 정책 확정
+   ```
+
+2. **OAuth scope 확장** — Supabase Auth 의 Google provider 설정에 `drive.file` 추가. 사용자가 처음 "Drive 첨부" 시도 시 추가 동의 화면.
+
+3. **Token 저장**:
+   - `external_integrations` row 에 access_token + refresh_token 암호화 보관
+   - 암호화 키: `INTEGRATION_TOKEN_ENCRYPTION_KEY` env (CLAUDE.md §6 예약됨)
+   - Token 만료 시 refresh API 자동 호출
+
+4. **폴더 자동 생성** (`lib/usecases/ensure-gdrive-folders.ts`):
+   ```ts
+   // 1) user.gdrive_root_folder_id 없으면 onuri-studio/ 폴더 생성
+   // 2) channel.gdrive_folder_id 없으면 {채널명} [{id}]/ 폴더 생성 (parent = root)
+   // 3) story.gdrive_folder_id 없으면 {스토리명} [{id}]/ 폴더 생성 (parent = channel)
+   // 4) 새 폴더 생성 시 anyone-with-link reader 권한 자동 부여
+   // 5) DB 에 folder_id 저장
+   ```
+   각 단계 idempotent — folder_id 있으면 재사용. Drive 에서 폴더가 삭제됐다면 404 catch → 재생성.
+
+5. **이름 변경 자동 rename** (`update-story-title.ts` / 채널명 변경 액션 확장):
+   - 변경 후 `files.update({ name: '{새이름} [{id}]' })` API 호출
+   - folder_id 로 식별하므로 사용자가 Drive 에서 직접 rename 해도 다음 변경 시 우리 컨벤션으로 다시 정렬
+
+6. **Shortcut 첨부** (`lib/usecases/attach-gdrive-file.ts`):
+   - Picker 결과로 file_id 받음
+   - 스토리 폴더 안에 shortcut 생성: `files.create({ name, mimeType: 'application/vnd.google-apps.shortcut', shortcutDetails: { targetId: fileId }, parents: [storyFolderId] })`
+   - `gdrive_attachments` 에 매핑 저장
+   - 캔버스에 `gdrive-file` shape 추가
+
+7. **Export/Import 처리** (`onuri-file.ts` 스키마 + `import-story.ts`):
+   - Export: gdrive shape 의 meta 에서 `fileId` 제거 + `imported: true` stamp
+   - Import: `imported: true` 또는 `!fileId` 인 shape 는 클릭 비활성 (split-screen 안 열림), hover tooltip "외부 import — Drive 연동 안 됨"
+
+8. **에러 처리** (5 case):
+   | 에러 | 처리 |
+   | --- | --- |
+   | `storageQuotaExceeded` | "Google Drive 용량 부족 (15GB 한도)" |
+   | `userRateLimitExceeded` | "Drive 요청 잦음, 잠시 후 재시도" |
+   | OAuth 거부 | "Drive 권한이 필요해요" 안내 |
+   | folder 404 (DB 매핑 있지만 Drive 에 없음) | folder_id 무효화 + 재생성 |
+   | shortcut 생성 실패 | metadata only (폴더 안엔 안 들어감) fallback + 안내 |
+
+#### 익명 사용자 동작
+
+- 익명 사용자도 `gdrive-file` shape 자체는 렌더 가능 (아이콘 + 파일명).
+- 클릭 시 iframe 시도 → Google 의 "로그인 필요" 자체 화면이 표시.
+- 우리 코드에선 별도 권한 검증 안 함 (Drive 권한에 위임).
+
+#### 보안 / 권한 고려
+
+- `drive.file` scope: 가장 좁은 권한. 사용자가 Picker 로 선택한 파일 + 우리 앱이 만든 폴더/shortcut 만 접근. Drive 전체 노출 X.
+- Token 암호화: `INTEGRATION_TOKEN_ENCRYPTION_KEY` 로 access/refresh token AES 암호화 (구현 시 `crypto.subtle` 또는 `node:crypto`).
+- 폴더 share 가 `anyone with link`: 보안 우려 있지만 익명 fallback + 결정 4(b) 자동 viewer 의 가장 단순한 구현. 더 좁은 권한 필요 시 specific email share 로 변경 가능 (Google email 알 수 있는 사용자만).
 
 ---
 
