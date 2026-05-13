@@ -293,8 +293,8 @@ export function StoryWorkspace({
       {/* 스토리 페이지는 다크 고정 (사용자 명시 요청). 떠나면 이전 테마로 복원. */}
       <ForceDarkTheme />
       <header
-        className="flex flex-wrap items-center justify-between gap-2 border-b border-divider bg-brand-bezel px-4 py-2 sm:gap-3 sm:px-6 sm:py-3"
-        style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}
+        className="flex flex-wrap items-center justify-between gap-x-2 gap-y-3 border-b border-divider bg-brand-bezel px-4 py-3 sm:gap-x-3 sm:px-6"
+        style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
       >
         {/* Left: back + title */}
         <div className="flex flex-col gap-1">
@@ -317,18 +317,22 @@ export function StoryWorkspace({
         </div>
 
         {/* Right: presence + status + laser + share + signin */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <OnAirIndicator active={someoneDrawing || isDrawingLocal} />
           <PresenceList presences={presences} currentUserId={realtimeUser.id} />
           <RealtimeStatusBadge status={displayStatus} />
           <LaserShareToggle mode={laserShareMode} onChange={setLaserShareMode} />
-          <ExportButton
-            editorRef={editorRef}
-            fileName={story.title}
-            storyId={story.id}
-            exporterNickname={realtimeUser.nickname}
-            appVersion="0.1.0"
-          />
+          {/* D-014: 익명 + 비-owner 일 때는 export 불가 (남의 채널 콘텐츠 내보내기 차단).
+              owner 거나 Google 회원이면 자유롭게 export 가능. */}
+          {(canEdit || (user && !user.isAnonymous)) && (
+            <ExportButton
+              editorRef={editorRef}
+              fileName={story.title}
+              storyId={story.id}
+              exporterNickname={realtimeUser.nickname}
+              appVersion="0.1.0"
+            />
+          )}
           <ShareButton url={shareUrl} label="스토리 URL 공유" />
           {user && <SignedInBanner user={user} compact />}
         </div>

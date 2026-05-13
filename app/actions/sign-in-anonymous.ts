@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { anonymousProvider } from '@/lib/infra/auth/anonymous-provider';
 import { nicknameSchema } from '@/lib/security/validators';
 
@@ -11,6 +12,8 @@ export interface SignInAnonymousState {
 
 // 랜딩 페이지 NicknameForm에서 호출하는 Server Action.
 // useFormState 와 호환되는 시그니처: (prevState, formData) => state.
+// D-014: 미인증 사용자가 다른 URL 로 접근 시 middleware 가 `next` hidden input
+// 으로 원래 URL 보존 → 가입 성공 후 그 URL 로 redirect.
 
 export async function signInAnonymous(
   _prevState: SignInAnonymousState,
@@ -35,7 +38,13 @@ export async function signInAnonymous(
   }
 
   revalidatePath('/');
-  return { ok: true };
+
+  // next 파라미터 검증 후 redirect (open redirect 방지: 같은 origin path 만 허용)
+  const nextRaw = formData.get('next');
+  if (typeof nextRaw === 'string' && nextRaw.startsWith('/') && !nextRaw.startsWith('//')) {
+    redirect(nextRaw);
+  }
+  redirect('/');
 }
 
 function prettyError(raw: string): string {

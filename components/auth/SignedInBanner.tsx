@@ -1,8 +1,13 @@
 'use client';
 
-import { signOut } from '@/app/actions/sign-out';
+import { useState } from 'react';
 import type { User } from '@/lib/domain/user';
+import { LeaveConfirmDialog } from './LeaveConfirmDialog';
 import { cn } from '@/lib/utils';
+
+// D-014: "나가기" 클릭 시 LeaveConfirmDialog 모달 표시.
+// - 익명: Google 연동 / 데이터 삭제 / 취소
+// - 회원: 로그아웃 / 취소 (데이터 보존)
 
 interface SignedInBannerProps {
   user: User;
@@ -11,55 +16,61 @@ interface SignedInBannerProps {
 }
 
 export function SignedInBanner({ user, compact = false }: SignedInBannerProps) {
-  if (compact) {
-    return (
-      <div className="flex items-center gap-3 text-sm">
-        <span
-          aria-hidden
-          className="h-3 w-3 rounded-full ring-1 ring-divider"
-          style={{ backgroundColor: user.color }}
-        />
-        <span className="text-fg">{user.nickname}</span>
-        <form action={signOut}>
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  return (
+    <>
+      {compact ? (
+        <div className="flex items-center gap-3 text-sm">
+          <span
+            aria-hidden
+            className="h-3 w-3 rounded-full ring-1 ring-divider"
+            style={{ backgroundColor: user.color }}
+          />
+          <span className="text-fg">{user.nickname}</span>
           <button
-            type="submit"
+            type="button"
+            onClick={() => setDialogOpen(true)}
             className="text-xs text-fg-muted underline-offset-4 hover:text-fg hover:underline"
           >
             나가기
           </button>
-        </form>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={cn(
-        'flex w-full max-w-md flex-col items-center gap-4 rounded-lg p-6',
-        'bg-brand-surface border border-divider',
-      )}
-    >
-      <div className="flex items-center gap-3">
-        <span
-          aria-hidden
-          className="h-4 w-4 rounded-full ring-2 ring-divider"
-          style={{ backgroundColor: user.color }}
-        />
-        <span className="text-lg text-fg">
-          안녕하세요, <strong>{user.nickname}</strong> 님
-        </span>
-      </div>
-      <form action={signOut}>
-        <button
-          type="submit"
+        </div>
+      ) : (
+        <div
           className={cn(
-            'h-9 rounded-sm border border-divider px-4 text-sm text-fg-muted',
-            'transition-colors hover:bg-brand-screen hover:text-fg',
+            'flex w-full max-w-md flex-col items-center gap-4 rounded-lg p-6',
+            'bg-brand-surface border border-divider',
           )}
         >
-          나가기
-        </button>
-      </form>
-    </div>
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className="h-4 w-4 rounded-full ring-2 ring-divider"
+              style={{ backgroundColor: user.color }}
+            />
+            <span className="text-lg text-fg">
+              안녕하세요, <strong>{user.nickname}</strong> 님
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDialogOpen(true)}
+            className={cn(
+              'h-9 rounded-sm border border-divider px-4 text-sm text-fg-muted',
+              'transition-colors hover:bg-brand-screen hover:text-fg',
+            )}
+          >
+            나가기
+          </button>
+        </div>
+      )}
+
+      <LeaveConfirmDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        isAnonymous={user.isAnonymous}
+      />
+    </>
   );
 }

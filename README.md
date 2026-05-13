@@ -42,6 +42,7 @@
 | 2026-05-11 | D-011 | 캔버스 색상 — **전체 도형 임의 색** | tldraw `shape.meta.customColor` 에 hex 저장, 각 ShapeUtil `.configure({ getCustomDisplayValues })` 로 렌더 override. 기본 팔레트 + HTML color picker 병행 ([§ 17.5](DESIGN.md#175-d-011-임의-색상-지원-구현-메모)) |
 | 2026-05-11 | D-012 | **라이트 모드 추가** | `html[data-theme]` CSS 변수 분기. system preference 감지 + localStorage + cookie. 헤더 sun/moon 토글. 스토리(화이트보드) 페이지는 다크 고정. accent 컬러 공유 |
 | 2026-05-12 | D-013 | **Google SSO 활성화** *(O-012/O-016 부분 해결)* | `google-provider.ts` 어댑터 + `/auth/callback`. 익명 트랙 병행 유지. 닉네임은 별도 입력. 익명 흔적은 Google 계정에 흡수 |
+| 2026-05-12 | D-014 | **사용자 유형별 권한 정책** | 익명: 닉네임 입력 강제(middleware) + 나가기 모달 (Google 연동 / 데이터 삭제) + 비-owner export 차단. Google 회원: admin 외 전체 기능, 나가기 시 세션만 종료 |
 
 ### ⏳ 미해결 (사용자 검토 대기)
 

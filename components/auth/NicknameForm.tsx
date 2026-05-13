@@ -9,11 +9,18 @@ import { cn } from '@/lib/utils';
 
 const initialState: SignInAnonymousState = { ok: false };
 
-export function NicknameForm() {
+interface NicknameFormProps {
+  /** D-014: 미인증 사용자가 다른 URL 로 접근 시 middleware 가 `?next=...` 보존.
+   * 가입 성공 후 그 URL 로 redirect (signInAnonymous action 에서 처리). */
+  next?: string;
+}
+
+export function NicknameForm({ next }: NicknameFormProps) {
   const [state, formAction] = useFormState(signInAnonymous, initialState);
 
   return (
     <form action={formAction} className="flex w-full max-w-sm flex-col gap-3">
+      {next && <input type="hidden" name="next" value={next} />}
       <label htmlFor="nickname" className="text-sm text-fg-muted">
         닉네임
       </label>

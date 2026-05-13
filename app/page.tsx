@@ -12,11 +12,22 @@ import { listMyChannels } from '@/lib/usecases/list-my-channels';
 import { isSupabaseConfigured } from '@/lib/config/env';
 import { enabledProviders } from '@/lib/infra/auth/provider-registry';
 
-export default async function LandingPage() {
+interface LandingPageProps {
+  searchParams: { next?: string };
+}
+
+export default async function LandingPage({ searchParams }: LandingPageProps) {
   const supabaseReady = isSupabaseConfigured();
   const user = supabaseReady ? await getCurrentUser() : null;
   const myChannels = user ? await listMyChannels(user.id) : [];
   const providers = enabledProviders();
+  // D-014: middleware 가 미인증 사용자를 ?next=원래URL 와 함께 redirect → 가입 후 자동 이동.
+  // open redirect 방지: 같은 origin 의 path 만 허용 (/ 로 시작 + // 로 시작 X)
+  const nextParam = searchParams.next;
+  const safeNext =
+    typeof nextParam === 'string' && nextParam.startsWith('/') && !nextParam.startsWith('//')
+      ? nextParam
+      : undefined;
 
   return (
     <main
@@ -57,7 +68,12 @@ export default async function LandingPage() {
         </>
       ) : (
         <section className="flex w-full flex-col items-center gap-6">
-          <NicknameForm />
+          {safeNext && (
+            <p className="text-center text-xs text-fg-muted">
+              계속하려면 먼저 닉네임을 입력해주세요.
+            </p>
+          )}
+          <NicknameForm next={safeNext} />
           {providers.includes('google') && (
             <>
               <div className="flex w-full max-w-sm items-center gap-3">

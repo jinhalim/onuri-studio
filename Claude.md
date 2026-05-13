@@ -423,6 +423,7 @@ ExternalIntegration {
 | 2026-05-11 | D-011 | 캔버스 색상 — **전체 도형 임의 색** | tldraw `shape.meta.customColor` 에 hex 저장, 각 ShapeUtil `.configure({ getCustomDisplayValues })` 로 렌더 override. `<Tldraw components={{StylePanel}}>` 로 HTML color picker section 추가. 구현 메모는 [`DESIGN.md` § 17.5](DESIGN.md#175-d-011-임의-색상-지원-구현-메모). | §5 ("색상·굵기 변경" Should 항목을 임의 색까지 확장) |
 | 2026-05-11 | D-012 | **라이트 모드 추가** (다크는 default) | `html[data-theme]` 으로 CSS 변수 분기. system preference 자동 감지 + localStorage + cookie 영속. 헤더에 sun/moon 토글. **스토리(화이트보드) 페이지는 다크 고정** (사용자 명시 요청). accent 컬러는 두 모드 공유. | §2 ("다크 모드 우선" → "다크 default + 라이트 선택 가능" 으로 완화) |
 | 2026-05-12 | D-013 | **Google SSO 활성화** (O-012/O-016 부분 해결) | provider abstraction 의 `google-provider.ts` 활성. `signInWithOAuth({ provider: 'google' })` + `/auth/callback`. 익명 트랙은 그대로 유지 — 두 트랙 병행. Google 로그인 후 닉네임은 별도 입력 단계 (`/auth/setup-nickname`) — 익명과 동일 UX. **익명 흔적은 Google 계정에 흡수** (`anonymous_sessions.converted_user_id` + 데이터 transfer). | §11 (Phase 7 SSO 를 일부 조기 도입) |
+| 2026-05-12 | D-014 | **사용자 유형별 권한 정책** | (1) 익명 — 메인 외 URL 접속 시 닉네임 입력 페이지 강제 + next 보존 (middleware). 나가기 시 확인 모달 → "Google 연동" 으로 `/me` 이동 또는 "데이터 삭제" 로 cascade 삭제. **비-owner 채널에서 export 불가**. (2) Google 회원 — admin 외 모든 기능. 나가기 시 단순 확인 모달 (세션만 종료, 데이터 보존). | §5 ("Could" 권한 시스템 일부 — 익명/회원 차별화) |
 
 ### A.2 미해결 결정 (Open)
 

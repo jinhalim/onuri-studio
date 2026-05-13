@@ -95,9 +95,10 @@ function Avatar({ presence, isSelf }: { presence: PresenceState; isSelf: boolean
         <span
           role="tooltip"
           className={cn(
-            'pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2',
-            'whitespace-nowrap rounded-sm border border-divider bg-brand-bezel px-2 py-1',
-            'text-[11px] font-medium text-fg shadow-lg',
+            'pointer-events-none absolute left-1/2 top-full z-[60] mt-2 -translate-x-1/2',
+            // truncate 보다는 max-w + 가로 wrap (길어도 잘리지 않게)
+            'max-w-[200px] rounded-md border border-divider bg-brand-bezel px-2.5 py-1.5',
+            'text-[11px] font-medium text-fg shadow-xl ring-1 ring-black/30',
           )}
         >
           <span style={{ color: presence.color }}>●</span> {label}
