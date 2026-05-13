@@ -64,12 +64,13 @@
 ## 📊 전체 진행률
 
 ```
-전체:        [██████░░░░░░░░░░░░░░]  33%   (3 / 9 phases)
-MVP (1~6):   [██████████░░░░░░░░░░]  50%   (3 / 6 phases)
-확장 (7~9):  [░░░░░░░░░░░░░░░░░░░░]   0%   (0 / 3 phases)
+전체:        [██████████████░░░░░░]  68%   (~6.1 / 9 phases)
+MVP (1~6):   [███████████████████░]  95%   (~5.7 / 6 phases)
+확장 (7~9):  [██░░░░░░░░░░░░░░░░░░]  13%   (~0.4 / 3 phases)
 ```
 
 > 위 바는 Phase 단위. 한 Phase 안의 세부 체크리스트는 [§ Phase별 체크리스트](#-phase별-체크리스트) 참조.
+> **최근 적용 결정** (2026-05-13): D-013 Google SSO · D-014 사용자 유형별 권한 · D-015 수정 권한 요청 · D-016 tldraw 라이선스 + Editor abstraction L1 · D-017 Sync hardening + 25명 정원.
 
 ---
 
@@ -104,14 +105,15 @@ gantt
 | 1     | 브랜딩 + 익명 인증 + 도메인 추상화            | ✅ 완료 | `[██████████] 100%` |
 | 2     | 채널/스토리 CRUD + 마이페이지 골격            | ✅ 완료 | `[██████████] 100%` |
 | 3     | 단일 사용자 화이트보드 + 자동 저장            | ✅ 완료 | `[██████████] 100%` |
-| 4     | Realtime 동기화 + Presence + On Air           | 🟢 진행 | `[░░░░░░░░░░]   0%` |
-| 5     | 내보내기/가져오기 + 관리자                    | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
-| 6     | 보안 강화 + 모바일 + 스테이징                 | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
-| 7     | Google SSO *(확장)*                           | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
+| 4     | Realtime 동기화 + Presence + On Air           | ✅ 완료* | `[██████████] 100%` |
+| 5     | 내보내기/가져오기 + 관리자                    | ✅ 완료 | `[██████████] 100%` |
+| 6     | 보안 강화 + 모바일 + 스테이징                 | 🟢 진행 | `[███████░░░]  70%` |
+| 7     | Google SSO *(확장)*                           | 🟢 진행 | `[███░░░░░░░]  30%` |
 | 8     | Google Workspace 연계 *(확장)*                | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
 | 9     | 이메일 매직 링크 + 도메인 + 프로덕션 *(확장)* | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
 
 > 범례: ✅ 완료 · 🟢 진행 중 · ⏳ 다음 차례 · ⏸ 대기
+> *Phase 4 는 **D-010** (Supabase Realtime broadcast) 으로 완료. 50명 동시 운영 필요 시 Yjs CRDT 마이그레이션 별도 결정 ([`DESIGN.md` § 17.9](DESIGN.md#179-d-017-realtime-sync-hardening-구현-메모)).
 
 ---
 
@@ -153,121 +155,141 @@ gantt
 <summary><b>Phase 2 — 채널/스토리 CRUD + 마이페이지 골격</b> ✅</summary>
 
 **도메인/유즈케이스**:
-- [ ] `lib/security/validators` — channelNameSchema / storyTitleSchema 추가
-- [ ] `lib/usecases/create-channel.ts` (nanoid 12자, 충돌 시 5회 재시도)
-- [ ] `lib/usecases/list-my-channels.ts`
-- [ ] `lib/usecases/get-channel-with-stories.ts`
-- [ ] `lib/usecases/create-story.ts` (기본 제목 "이름 N" 자동)
-- [ ] `lib/usecases/delete-story.ts`
-- [ ] `lib/usecases/record-participation.ts` (방문 시 `last_visited_at` 갱신)
+- [x] `lib/security/validators` — channelNameSchema / storyTitleSchema 추가
+- [x] `lib/usecases/create-channel.ts` (nanoid 12자, 충돌 시 5회 재시도)
+- [x] `lib/usecases/list-my-channels.ts`
+- [x] `lib/usecases/get-channel-with-stories.ts`
+- [x] `lib/usecases/create-story.ts` (기본 제목 "이름 N" 자동)
+- [x] `lib/usecases/delete-story.ts`
+- [x] `lib/usecases/record-participation.ts` (방문 시 `last_visited_at` 갱신)
 
 **Server Actions**:
-- [ ] `app/actions/create-channel.ts`
-- [ ] `app/actions/create-story.ts`
-- [ ] `app/actions/delete-story.ts`
+- [x] `app/actions/create-channel.ts`
+- [x] `app/actions/create-story.ts`
+- [x] `app/actions/delete-story.ts`
 
 **컴포넌트**:
-- [ ] `components/channel/StoryCard.tsx` (썸네일/제목/마지막 수정일/On Air placeholder)
-- [ ] `components/channel/ChannelList.tsx`
-- [ ] `components/channel/CreateChannelForm.tsx`
-- [ ] `components/channel/CreateStoryButton.tsx`
-- [ ] `components/channel/DeleteStoryButton.tsx`
-- [ ] `components/share/ShareButton.tsx` (URL 클립보드 복사)
+- [x] `components/channel/StoryCard.tsx` (썸네일/제목/마지막 수정일/On Air placeholder)
+- [x] `components/channel/ChannelList.tsx`
+- [x] `components/channel/CreateChannelForm.tsx`
+- [x] `components/channel/CreateStoryButton.tsx`
+- [x] `components/channel/DeleteStoryButton.tsx`
+- [x] `components/share/ShareButton.tsx` (URL 클립보드 복사)
 
 **페이지**:
-- [ ] `app/page.tsx` 갱신 — 로그인 시 채널 목록 + 새 채널 만들기
-- [ ] `app/ch/[channelId]/page.tsx` — Channel Guide
-- [ ] `app/me/page.tsx` — 마이페이지 (익명도 자기 채널 목록 확인 가능)
+- [x] `app/page.tsx` 갱신 — 로그인 시 채널 목록 + 새 채널 만들기
+- [x] `app/ch/[channelId]/page.tsx` — Channel Guide
+- [x] `app/me/page.tsx` — 마이페이지 (익명도 자기 채널 목록 확인 가능)
 
 **검증**:
-- [ ] typecheck / lint / build 통과
-- [ ] 채널 생성 → URL 공유 → 다른 브라우저로 조회 확인
-- [ ] 스토리 생성 / 삭제 / participations 기록 확인
+- [x] typecheck / lint / build 통과
+- [x] 채널 생성 → URL 공유 → 다른 브라우저로 조회 확인
+- [x] 스토리 생성 / 삭제 / participations 기록 확인
 
 </details>
 
 <details>
 <summary><b>Phase 3 — 단일 사용자 화이트보드 + 자동 저장</b> ✅</summary>
 
-**저장 형식 결정**: tldraw 네이티브 snapshot (JSON → bytea). Phase 4에서 Yjs로 전환.
+**저장 형식 결정**: tldraw 네이티브 snapshot (JSON, migration 0006 에서 bytea → text 로 변경 — Supabase REST API round-trip 호환). D-010 에서 Yjs 후순위로 결정.
 
 **유즈케이스 / Server Actions**:
-- [ ] `lib/usecases/save-story-snapshot.ts` (bytea 저장)
-- [ ] `lib/usecases/load-story-snapshot.ts` (bytea → JSON 복원)
-- [ ] `lib/usecases/update-story-title.ts`
-- [ ] `app/actions/save-story-snapshot.ts` (5초 debounce 클라이언트에서 호출)
-- [ ] `app/actions/update-story-title.ts`
+- [x] `lib/usecases/save-story-snapshot.ts` (text 저장 + snapshot_updated_at)
+- [x] `lib/usecases/load-story-snapshot.ts`
+- [x] `lib/usecases/update-story-title.ts`
+- [x] `app/actions/save-story-snapshot.ts` (1.5초 debounce + D-017 Smart autosave 연기)
+- [x] `app/actions/update-story-title.ts`
 
 **컴포넌트**:
-- [ ] `components/canvas/StudioCanvas.tsx` (tldraw 래퍼 + auto-save listener)
-- [ ] `components/story/StoryTitleInline.tsx` (상태 머신: idle ↔ editing ↔ saving)
-- [ ] tldraw 기본 도구바 그대로 사용 (펜/사각형/원/화살표/텍스트/스티키/지우개 + 단축키 자동)
+- [x] `components/canvas/StudioCanvas.tsx` (tldraw 래퍼 + auto-save listener + D-016 abstraction)
+- [x] `components/story/StoryTitleInline.tsx` (상태 머신: idle ↔ editing ↔ saving)
+- [x] tldraw 기본 도구바 그대로 사용 (펜/사각형/원/화살표/텍스트/스티키/지우개 + 단축키 자동)
 
 **페이지**:
-- [ ] `app/ch/[channelId]/story/[storyId]/page.tsx` (whiteboard)
+- [x] `app/ch/[channelId]/story/[storyId]/page.tsx` (whiteboard)
 
 **검증**:
-- [ ] typecheck / lint / build 통과
-- [ ] 브라우저: 도형 그리기 → 5초 후 자동 저장 → 새로고침 시 복원
-- [ ] 제목 인라인 편집: Enter/blur 저장, Esc 롤백, 빈 값 롤백
+- [x] typecheck / lint / build 통과
+- [x] 브라우저: 도형 그리기 → 1.5초 후 자동 저장 → 새로고침 시 복원
+- [x] 제목 인라인 편집: Enter/blur 저장, Esc 롤백, 빈 값 롤백
+
+</details>
+
+<details>
+<summary><b>Phase 4 — Realtime 동기화 + Presence + On Air</b> ✅</summary>
+
+**드라이버 결정 (D-010)**: Supabase Realtime broadcast + presence. tldraw store diff 를 last-write-wins 으로 전송. Yjs 마이그레이션은 후순위 (50명 운영 시점에 재검토 — D-017).
+
+- [x] D-010 결정 (O-008 해결)
+- [x] `lib/hooks/useStoryRealtime` (채널 구독 + broadcast + presence track)
+- [x] `lib/hooks/useChannelPresence` (Channel Guide 라이브 도트용 별도 채널)
+- [x] `components/brand/OnAirIndicator` (Tailwind animate-pulse-rec)
+- [x] `components/canvas/PresenceLayer` (다른 사용자 커서 + 닉네임 라벨)
+- [x] `components/presence/PresenceList` (헤더용 접속자 도트 + tooltip)
+- [x] `StudioCanvas` 통합:
+  - [x] 사용자 변경 감지 → broadcast (owner / 권한자만)
+  - [x] 원격 변경 수신 → `editor.store.mergeRemoteChanges()` 로 무한 루프 방지
+  - [x] 포인터 이동 → presence cursor 갱신 (15Hz 스로틀, D-017)
+  - [x] 레이저 포인터 broadcast (공유/비공유 모드 + SVG 글로우 오버레이)
+  - [x] On Air 표시 (presence.isDrawing 기반)
+- [x] 두 브라우저로 동기화 확인
+- [x] **D-017 sync hardening**: console.log cleanup / Smart autosave / Non-destructive reconnect / Broadcast throttle 50ms batching / cursor 30Hz→15Hz / laser 60Hz→30Hz / **per-story 25명 정원 제한 + OverflowNotice**
+
+> **50명 운영 필요 시 후속**: Yjs CRDT 마이그레이션 ([`DESIGN.md` § 17.9](DESIGN.md#179-d-017-realtime-sync-hardening-구현-메모)).
+
+</details>
+
+<details>
+<summary><b>Phase 5 — 내보내기/가져오기 + 관리자</b> ✅</summary>
+
+- [x] `OnuriFile` v1 스키마 + zod 검증 (`lib/domain/onuri-file.ts`)
+- [x] `.onuri.json` / `.png` / `.svg` 내보내기 (`ExportButton`, tldraw 빌트인 + 커스텀 직렬화)
+- [x] 가져오기 (드래그앤드롭 + 파일 선택, `import-story.ts` 액션)
+- [x] Import 시 병합/새 스토리 선택 다이얼로그
+- [x] 마이페이지 히스토리 (최근 방문 / 즐겨찾기 `getMyHistory`, `FavoriteToggle`)
+- [x] `/admin` 통계 페이지 (role=admin guard, `getAdminDashboard`)
+- [x] 사용자/채널/스토리 검색 (admin)
+- [x] **D-014 적용**: 익명 + 비-owner 채널에선 ExportButton 숨김
 
 </details>
 
 <details open>
-<summary><b>Phase 4 — Realtime 동기화 + Presence + On Air</b> 🟢</summary>
+<summary><b>Phase 6 — 보안 + 모바일 + 스테이징</b> 🟢</summary>
 
-**드라이버 결정 (D-010)**: Supabase Realtime broadcast + presence. tldraw store diff 를 last-write-wins 으로 전송. Yjs 마이그레이션은 후순위.
-
-- [x] D-010 결정 (O-008 해결)
-- [ ] `lib/hooks/useStoryRealtime` (채널 구독 + broadcast + presence track)
-- [ ] `components/brand/OnAirIndicator` (Tailwind animate-pulse-rec)
-- [ ] `components/canvas/PresenceLayer` (다른 사용자 커서 + 닉네임 라벨)
-- [ ] `StudioCanvas` 통합:
-  - [ ] 사용자 변경 감지 → broadcast (소유자만, 방문자는 수신만)
-  - [ ] 원격 변경 수신 → `editor.store.mergeRemoteChanges()`로 무한 루프 방지
-  - [ ] 포인터 이동 → presence cursor 갱신 (60fps 스로틀)
-  - [ ] On Air 표시 (누군가 그리는 중 표시)
-- [ ] 두 브라우저로 50ms 이내 동기화 확인
-
-</details>
-
-<details>
-<summary><b>Phase 5 — 내보내기/가져오기 + 관리자</b> ⏸</summary>
-
-- [ ] `OnuriFile` v1 스키마 + zod 검증
-- [ ] `GET /api/export/:storyId` (`.onuri.json` 다운로드)
-- [ ] `.png` / `.svg` 내보내기 (tldraw 빌트인)
-- [ ] `POST /api/import` (드래그앤드롭 + 파일선택)
-- [ ] Import 시 병합/새 스토리 선택 다이얼로그
-- [ ] 마이페이지 히스토리 (최근 방문 / 즐겨찾기)
-- [ ] `/admin` 통계 페이지 (role=admin guard)
-- [ ] 사용자/채널/스토리 검색
-
-</details>
-
-<details>
-<summary><b>Phase 6 — 보안 + 모바일 + 스테이징</b> ⏸</summary>
-
-- [ ] RLS 정책 침투 테스트
-- [ ] Rate Limit 적용 (채널 5/분, 스토리 20/분 등)
-- [ ] DOMPurify로 XSS 방어
-- [ ] 파일 업로드 magic byte 재검증
+- [x] RLS 정책 적용 (migration 0004 + 0010 — stories / channels / participations / users / story_permissions / notifications)
+- [x] middleware 로 익명 사용자 URL 접속 가드 + next 보존 (D-014)
+- [x] 닉네임 / 채널명 / 스토리 제목 XSS 위험 문자 거부 (validators)
+- [x] open redirect 방지 (sign-in 액션 next 파라미터 검증)
+- [x] 모바일/태블릿 safe-area + viewport + 헤더 wrap 대응
+- [x] 라이트/다크 모드 (D-012) — system preference 자동 감지 + 영속화
+- [x] **D-014 사용자 유형별 권한 정책** (익명/Google 분기)
+- [x] **D-015 스토리 단위 수정 권한 요청/승인**
+- [x] **D-016 tldraw Hobby License attribution + Editor abstraction L1**
+- [x] **D-017 Realtime sync hardening + per-story 25명 정원 제한**
+- [ ] Rate Limit 적용 (채널 5/분, 스토리 20/분 등) — Redis 또는 Vercel KV
+- [ ] DOMPurify 로 XSS 방어 강화
+- [ ] 파일 업로드 magic byte 재검증 (.onuri.json import 시 MIME / 사이즈 외 추가 검사)
 - [ ] Service Role 키 클라이언트 번들 차단 (ESLint custom rule)
-- [ ] 모바일/태블릿 터치 대응
-- [ ] WCAG AA 점검
-- [ ] Lighthouse 모바일/접근성 90+
+- [ ] WCAG AA 점검 + Lighthouse 모바일/접근성 90+
 - [ ] Vercel 스테이징 배포 (`onuri-studio.vercel.app`)
 
 </details>
 
 <details>
-<summary><b>Phase 7 — Google SSO</b> ⏸ (확장)</summary>
+<summary><b>Phase 7 — Google SSO</b> 🟢 (확장)</summary>
 
-- [ ] Google Cloud Console OAuth 클라이언트 생성
-- [ ] `google-provider.ts` 구현
-- [ ] `provider-registry.ts`에 `google` 활성화
-- [ ] AuthGate에 `[Google로 시작]` 버튼 자동 노출 확인
-- [ ] 계정 연결(linked_providers) 흐름
+**D-013 적용** (2026-05-12): Google SSO 만 활성, GitHub/Microsoft/Apple 은 별도 결정 시 추가.
+
+- [x] Google Cloud Console OAuth 클라이언트 생성 + redirect URI 등록
+- [x] `google-provider.ts` 구현 (`signInWithOAuth({ provider: 'google' })`)
+- [x] `/auth/callback` 라우트로 OAuth code 교환
+- [x] `/auth/setup-nickname` — Google 로그인 직후 닉네임 입력 UX (익명과 동일)
+- [x] `provider-registry.ts` 에 `google` 활성화
+- [x] 익명 → Google 계정 흡수 (`anonymous_sessions.converted_user_id` + 데이터 transfer, `transfer-anonymous-to-user.ts`)
+- [x] 마이페이지 ProviderBadge (Google 아이콘 표시)
+- [ ] GitHub SSO (별도 결정 필요)
+- [ ] Microsoft SSO (별도 결정 필요)
+- [ ] Apple SSO (별도 결정 필요)
 
 </details>
 
@@ -344,14 +366,28 @@ Supabase 미설정 상태에서도 dev 서버는 부팅되며, 랜딩 페이지�
 
 ---
 
-## 🧭 다음 작업 (Onboarding)
+## 🧭 다음 작업
 
-이 저장소를 처음 받은 사람이 해야 할 일:
+### 신규 Onboarding (저장소를 처음 받은 사람)
 
-1. [`Claude.md`](Claude.md) 통독 — 제품 비전 / 인증 정책 / 데이터 모델
-2. [`DESIGN.md`](DESIGN.md) 통독 — 폴더 구조와 Phase 1 산출물 확인
-3. Supabase 무료 프로젝트 생성 → URL/anon key 확보
-4. Phase 1 체크리스트 첫 항목부터 순서대로 처리
+1. [`Claude.md`](Claude.md) 통독 — 제품 비전 / 인증 정책 / 데이터 모델 / 결정 이력 (§ 부록 A)
+2. [`DESIGN.md`](DESIGN.md) 통독 — 폴더 구조 / § 17 결정 메모 / § 17.7 라이선스 / § 17.8 abstraction / § 17.9 sync
+3. Supabase 무료 프로젝트 생성 → URL / anon key / service role key 확보
+4. `.env.local` 작성 + `supabase/migrations/0001~0010.sql` 차례로 SQL Editor 에서 실행
+5. `pnpm install && pnpm run dev` 으로 부팅 확인
+
+### 다음 작업 우선순위 (Phase 6 마무리)
+
+1. **Vercel 스테이징 배포** — `onuri-studio.vercel.app` 에 push, env 등록
+2. **Rate Limit 적용** — Vercel KV 또는 Upstash Redis 로 채널/스토리 생성 + 매직 링크 + 알림 요청 제한
+3. **DOMPurify** — note shape 의 `meta.createdBy` / channel name 등 자유 입력 필드 보강
+4. **ESLint rule** — Service Role 키 클라이언트 번들 차단 + `tldraw` 직접 import 금지 (`@/lib/editor` 강제)
+5. **WCAG AA 점검 + Lighthouse 90+**
+
+### 50명 동시 운영이 필요해진 시점
+
+- **Yjs CRDT 마이그레이션** — tldraw `useYjsStore` + Supabase Storage 의 Y.Doc binary 영속 ([§ 17.9](DESIGN.md#179-d-017-realtime-sync-hardening-구현-메모))
+- 현재는 D-017 의 25명 cap + Quick wins 로 운영 가능 (Overflow 발생 시 안내)
 
 ---
 
