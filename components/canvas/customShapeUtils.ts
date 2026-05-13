@@ -17,7 +17,7 @@ import {
   NoteShapeUtil,
   TextShapeUtil,
   type TLShape,
-} from 'tldraw';
+} from '@/lib/editor';
 
 const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 

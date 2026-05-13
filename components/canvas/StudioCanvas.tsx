@@ -8,12 +8,15 @@ import {
   type Editor,
   type TLComponents,
   type TLRecord,
-} from 'tldraw';
+} from '@/lib/editor';
+// tldraw CSS 는 side-effect import — 백엔드 교체 시 함께 갈아끼우는 게 명확하도록
+// 본 파일(가장 상위 캔버스 마운트)에서만 한 번 import.
 import 'tldraw/tldraw.css';
 import { customShapeUtils } from './customShapeUtils';
-import { CustomStylePanel } from './CustomStylePanel';
+import { CustomStylePanel, getPendingCustomColor } from './CustomStylePanel';
 import { NoteAuthorLayer } from './NoteAuthorLayer';
 import { OnboardingOverlay } from '@/components/story/OnboardingOverlay';
+import { RequestEditButton } from '@/components/story/RequestEditButton';
 // cn 은 SaveIndicator 제거 후 미사용 → import 도 삭제
 
 // tldraw v5 의 ScribbleOverlayUtil 은 <canvas> 에 직접 레이저 stroke 를 그린다.
@@ -44,8 +47,16 @@ import { PresenceLayer } from './PresenceLayer';
 import { RemoteLaserLayer, type RemoteLaserStroke } from './RemoteLaserLayer';
 
 const AUTOSAVE_DEBOUNCE_MS = 1_500;
-const CURSOR_THROTTLE_MS = 33; // ~30Hz
-const LASER_THROTTLE_MS = 16; // ~60Hz (스무스한 트레일)
+// Smart autosave: 다른 사용자가 그리는 중이면 저장 연기 (in-flight broadcast 도착 시간 확보).
+// 최대 연기 횟수 제한 — 무한 연기 방지 (오랜 시간 모두가 계속 그리는 케이스).
+const AUTOSAVE_DEFER_RETRY_MS = 1_000;
+const AUTOSAVE_MAX_DEFERS = 5;
+// 50명 동시 접속 환경 대비 throttle 조정 (P1, P2):
+//   - cursor 30Hz → 15Hz: 50명 × 30Hz = 1500 msg/s → Supabase free tier 한계 가까움.
+//     15Hz 도 시각적으로 충분 (~영화 frame rate 절반).
+//   - laser 60Hz → 30Hz: pointer 와 native sync 의도였지만 화면 render 와 별개.
+const CURSOR_THROTTLE_MS = 66; // ~15Hz
+const LASER_THROTTLE_MS = 33; // ~30Hz
 const DRAWING_RESET_MS = 800;
 
 // 본인 레이저 글로우 색. user.color 대신 빨간색(#FF3D5A) 으로 통일 — 사용자 명시 요청.
@@ -130,6 +141,14 @@ export function StudioCanvas({
   );
   const [editor, setEditor] = useState<Editor | null>(null);
 
+  // D-015: canEdit 가 바뀌면 (예: 수정 권한 승인 후 router.refresh 로 prop 변경)
+  // editor.isReadonly 도 동기화. 초기 mount 의 isReadonly 설정은 handleMount 에 있어서
+  // 마운트 이후 변화는 본 effect 가 담당.
+  useEffect(() => {
+    if (!editor) return;
+    editor.updateInstanceState({ isReadonly: !canEdit });
+  }, [editor, canEdit]);
+
   // 부모에 상태 변화 알림
   useEffect(() => {
     onSaveStateChange?.({ status, lastSavedAt, errorMsg });
@@ -146,12 +165,19 @@ export function StudioCanvas({
   const isDrawingPresenceRef = useRef(false);
   const laserShareModeRef = useRef(laserShareMode);
   const currentUserNicknameRef = useRef(currentUserNickname);
+  // Smart autosave 용: 매 render 의 최신 presences 를 deps 없이 읽기 위해 ref 미러.
+  const presencesRef = useRef(presences);
+  // 연기 횟수 추적 — 무한 연기 방지.
+  const autosaveDeferCountRef = useRef(0);
   useEffect(() => {
     laserShareModeRef.current = laserShareMode;
   }, [laserShareMode]);
   useEffect(() => {
     currentUserNicknameRef.current = currentUserNickname;
   }, [currentUserNickname]);
+  useEffect(() => {
+    presencesRef.current = presences;
+  }, [presences]);
 
   // 본인 레이저 stroke 도 SVG 오버레이로 렌더해서 빛번짐/형광 효과를 본인에게도 적용.
   // tldraw v5 의 native scribble 은 <canvas> 에 그려져 CSS filter 가 안 먹음.
@@ -192,25 +218,25 @@ export function StudioCanvas({
     return () => window.clearInterval(interval);
   }, []);
 
+  // 통합 저장 함수. 두 가지 사용 패턴:
+  //   - 일반 (manualSave / debounced autosave): await + 상태 UI 갱신.
+  //   - flushPending (unmount / visibility hidden): fire-and-forget, 상태 UI 갱신 skip.
+  // 호출 측이 await 여부로 선택.
   const flushSave = useCallback(async () => {
     const ed = editorRef.current;
     if (!ed || !canEdit) return;
     setStatus('saving');
     setErrorMsg(null);
     try {
-      // editor.getSnapshot() 은 { document: TLStoreSnapshot, session } 반환.
-      // editor.loadSnapshot 이 동일 포맷 + 옛 store-level 포맷 모두 받음 → 호환 OK.
       const snapshot = ed.getSnapshot();
       const json = JSON.stringify(snapshot);
-      console.log('[StudioCanvas] 저장 시작', { storyId, bytes: json.length });
       const result = await saveStorySnapshotAction(storyId, json);
       if (!result.ok) {
-        console.error('[StudioCanvas] 저장 실패 (server):', result.error);
+        console.error('[StudioCanvas] 저장 실패:', result.error);
         setStatus('error');
         setErrorMsg(result.error ?? 'unknown');
         return;
       }
-      console.log('[StudioCanvas] 저장 완료', result.savedAt);
       setStatus('saved');
       setLastSavedAt(Date.now());
       window.setTimeout(() => setStatus('idle'), 1500);
@@ -221,9 +247,8 @@ export function StudioCanvas({
     }
   }, [storyId, canEdit]);
 
-  // unmount / 페이지 가시성 변경 시 pending debounce 를 즉시 발화.
-  // fire-and-forget — Next.js client-side navigation 은 tab 이 살아있어 fetch 가 완료됨.
-  // canEdit / storyId 는 페이지 생애주기 동안 고정이라 useCallback dep 으로 안전.
+  // unmount / visibility 변경 시 pending debounce 즉시 발화.
+  // fire-and-forget — tab 닫힘 직전에도 Next.js 서버 액션은 백그라운드로 처리됨.
   const flushPendingSave = useCallback(() => {
     if (!debounceRef.current) return;
     clearTimeout(debounceRef.current);
@@ -231,17 +256,10 @@ export function StudioCanvas({
     const ed = editorRef.current;
     if (!ed || !canEdit) return;
     try {
-      const snapshot = ed.getSnapshot();
-      const json = JSON.stringify(snapshot);
-      console.log('[StudioCanvas] pending save flush (unmount/visibility)', { bytes: json.length });
-      // fire-and-forget. 페이지 떠난 후에도 Next.js 서버 액션이 처리 완료.
+      const json = JSON.stringify(ed.getSnapshot());
       void saveStorySnapshotAction(storyId, json).then((result) => {
-        if (!result.ok) {
-          console.error('[StudioCanvas] flush 저장 실패:', result.error);
-        } else {
-          console.log('[StudioCanvas] flush 저장 완료');
-          setLastSavedAt(Date.now());
-        }
+        if (result.ok) setLastSavedAt(Date.now());
+        else console.error('[StudioCanvas] flush 저장 실패:', result.error);
       });
     } catch (err) {
       console.error('[StudioCanvas] flush 실패:', err);
@@ -299,14 +317,29 @@ export function StudioCanvas({
         onLocalDrawingChange(false);
       }, DRAWING_RESET_MS);
 
-      // 자동 저장 (소유자만)
+      // 자동 저장 (소유자만) — Smart autosave (A1):
+      // 다른 사용자가 그리는 중이면 in-flight broadcast 가 아직 도착 안 했을 수 있으니
+      // 저장 연기. 그렇지 않으면 owner 의 로컬 snapshot 이 다른 사용자 변경 누락한
+      // 상태로 DB 에 덮어쓰여서 영구 손실 → 사용자가 자주 보고한 "내용 사라짐" 의 핵심 원인.
       if (canEdit) {
         setStatus('pending');
         if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(flushSave, AUTOSAVE_DEBOUNCE_MS);
+        autosaveDeferCountRef.current = 0;
+        debounceRef.current = setTimeout(function attempt() {
+          const othersDrawing = presencesRef.current.some(
+            (p) => p.userId !== currentUserId && p.isDrawing,
+          );
+          if (othersDrawing && autosaveDeferCountRef.current < AUTOSAVE_MAX_DEFERS) {
+            // 연기: in-flight 도착 시간 확보 후 재시도
+            autosaveDeferCountRef.current += 1;
+            debounceRef.current = setTimeout(attempt, AUTOSAVE_DEFER_RETRY_MS);
+            return;
+          }
+          void flushSave();
+        }, AUTOSAVE_DEBOUNCE_MS);
       }
     },
-    [broadcast, updatePresence, onLocalDrawingChange, canEdit, flushSave],
+    [broadcast, updatePresence, onLocalDrawingChange, canEdit, currentUserId, flushSave],
   );
 
   const handleMount = useCallback(
@@ -318,20 +351,12 @@ export function StudioCanvas({
       if (initialSnapshotJson) {
         try {
           const parsed = JSON.parse(initialSnapshotJson) as Record<string, unknown>;
-          console.log('[StudioCanvas] snapshot 로드 시작', {
-            bytes: initialSnapshotJson.length,
-            keys: Object.keys(parsed),
-          });
           // editor.loadSnapshot 은 TLEditorSnapshot({document,session}) 와
-          // TLStoreSnapshot({store,schema}) 둘 다 받는다. editor.getSnapshot() 으로 저장한
-          // 새 포맷 (document/session) 과 기존 store.getStoreSnapshot() 포맷 모두 호환.
+          // TLStoreSnapshot({store,schema}) 둘 다 받는다 (구포맷/신포맷 호환).
           ed.loadSnapshot(parsed as Parameters<typeof ed.loadSnapshot>[0]);
-          console.log('[StudioCanvas] 초기 snapshot 로드 완료');
         } catch (err) {
           console.warn('[StudioCanvas] 초기 snapshot 파싱 실패, 빈 캔버스로 시작:', err);
         }
-      } else {
-        console.log('[StudioCanvas] 초기 snapshot 없음 (빈 캔버스)');
       }
 
       if (!canEdit) {
@@ -359,6 +384,26 @@ export function StudioCanvas({
           return {
             ...record,
             meta: { ...record.meta, createdBy: nickname },
+          };
+        },
+      );
+
+      // 도구 모드에서 사용자가 미리 고른 "사용자 지정 색상" (pendingCustomColor)
+      // 을 새로 만들어지는 모든 도형 타입의 meta.customColor 에 stamp.
+      // 도형 선택 없이 색을 골라두고 그리면 그 색이 적용되도록 — 선택 도형 picker
+      // 와 일관된 UX 제공. source==='user' 만 처리 (remote 는 이미 stamp 된 채로 옴).
+      const disposeBeforeCreateColor = ed.sideEffects.registerBeforeCreateHandler(
+        'shape',
+        (record, source) => {
+          if (source !== 'user') return record;
+          const pending = getPendingCustomColor();
+          if (!pending) return record;
+          const meta = record.meta as { customColor?: unknown } | undefined;
+          // 이미 누가 stamp 해뒀으면 (e.g. paste, undo) 유지.
+          if (typeof meta?.customColor === 'string') return record;
+          return {
+            ...record,
+            meta: { ...record.meta, customColor: pending },
           };
         },
       );
@@ -471,6 +516,7 @@ export function StudioCanvas({
         flushPendingSave();
         unsubscribe();
         disposeBeforeCreate();
+        disposeBeforeCreateColor();
         disposeBeforeChange();
       };
     },
@@ -509,20 +555,13 @@ export function StudioCanvas({
       <PresenceLayer presences={presences} editor={editor} currentUserId={currentUserId} />
       <OnboardingForEmptyBoard editor={editor} storyId={storyId} />
 
-      {/* 우상단: 읽기 전용 배지만. 저장 상태는 StoryWorkspace 헤더의 SaveStatusBadge 가 표시. */}
+      {/* 우상단: 읽기 전용 + 수정 요청 버튼 (D-015).
+          pointer-events-auto 로 클릭 가능. owner 면 표시 안 함. */}
       {!canEdit && (
-        <div className="pointer-events-none absolute right-4 top-4 z-50">
-          <ReadOnlyBadge />
+        <div className="absolute right-4 top-4 z-50">
+          <RequestEditButton storyId={storyId} userId={currentUserId === '__anon__' ? null : currentUserId} />
         </div>
       )}
-    </div>
-  );
-}
-
-function ReadOnlyBadge() {
-  return (
-    <div className="rounded-sm border border-divider bg-brand-bezel/80 px-3 py-1 text-xs text-fg-muted backdrop-blur-sm">
-      읽기 전용 (방문자 모드)
     </div>
   );
 }

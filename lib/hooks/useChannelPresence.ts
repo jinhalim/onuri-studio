@@ -19,6 +19,11 @@ export interface ChannelPresence {
   /** 현재 어디 있는지. null = Channel Guide, 값 = 그 storyId. */
   currentStoryId: string | null;
   isDrawing: boolean;
+  /**
+   * 마지막으로 track() 된 시각. CLOSED→재구독 사이클에서 stale entry 가
+   * 잠시 남으면 dedupe 시 freshest 를 골라야 한다 (useStoryRealtime 과 동일 이유).
+   */
+  updatedAt: number;
 }
 
 export interface UseChannelPresenceOptions {
@@ -53,6 +58,7 @@ export function useChannelPresence({
       color: user.color,
       currentStoryId,
       isDrawing,
+      updatedAt: Date.now(),
     };
     const channel = channelRef.current;
     if (channel) void channel.track(stateRef.current);
@@ -78,11 +84,13 @@ export function useChannelPresence({
 
     channel.on('presence', { event: 'sync' }, () => {
       const state = channel.presenceState<ChannelPresence>();
-      // userId 단위 dedupe. 같은 사용자가 여러 탭이면 가장 최신/그리는 중인 항목 채택.
+      // userId 단위 dedupe — freshest (updatedAt 최신) 우선.
+      // 이전엔 `isDrawing: true` 우선이었는데 stale entry 가 새 false 를 가리는
+      // 버그가 있어 freshest-wins 로 변경 (useStoryRealtime 과 동일).
       const dedupedMap = new Map<string, ChannelPresence>();
       for (const p of Object.values(state).flat()) {
         const existing = dedupedMap.get(p.userId);
-        if (!existing || (p.isDrawing && !existing.isDrawing)) {
+        if (!existing || (p.updatedAt ?? 0) > (existing.updatedAt ?? 0)) {
           dedupedMap.set(p.userId, p);
         }
       }
@@ -92,18 +100,13 @@ export function useChannelPresence({
 
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const scheduleRetry = (delayMs: number, reason: string) => {
+    const scheduleRetry = (delayMs: number) => {
       if (cancelled) return;
       if (retryCountRef.current >= MAX_RETRIES) {
-        console.error(`[useChannelPresence] 최대 재시도 ${MAX_RETRIES}회 초과 — 중단`);
+        console.error('[useChannelPresence] 최대 재시도 초과');
         return;
       }
       const wait = delayMs * Math.pow(1.5, retryCountRef.current);
-      console.warn(
-        `[useChannelPresence] ${reason} → ${Math.round(wait)}ms 후 새 channel 으로 재구독 (시도 ${
-          retryCountRef.current + 1
-        }/${MAX_RETRIES})`,
-      );
       if (retryTimer) clearTimeout(retryTimer);
       retryTimer = setTimeout(() => {
         if (cancelled) return;
@@ -114,14 +117,15 @@ export function useChannelPresence({
 
     channel.subscribe(async (status) => {
       if (cancelled) return;
-      console.log('[useChannelPresence] status:', status);
       if (status === 'SUBSCRIBED' && stateRef.current) {
         retryCountRef.current = 0;
+        // 재구독 시 stale entry 보다 fresh 하게 보이도록 updatedAt 갱신.
+        stateRef.current = { ...stateRef.current, updatedAt: Date.now() };
         await channel.track(stateRef.current);
       } else if (status === 'CLOSED') {
-        scheduleRetry(1500, 'CLOSED 수신');
+        scheduleRetry(1500);
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        scheduleRetry(3000, `${status} 수신`);
+        scheduleRetry(3000);
       }
     });
 

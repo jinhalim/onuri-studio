@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { getChannelWithStories } from '@/lib/usecases/get-channel-with-stories';
 import { loadStorySnapshot } from '@/lib/usecases/load-story-snapshot';
 import { recordParticipation } from '@/lib/usecases/record-participation';
+import { hasStoryEditPermission } from '@/lib/usecases/has-story-edit-permission';
 import { urls } from '@/lib/config/urls';
 
 interface StoryPageProps {
@@ -25,7 +26,12 @@ export default async function StoryPage({ params }: StoryPageProps) {
   const story = channelData.stories.find((s) => s.id === storyId);
   if (!story) notFound();
 
-  const canEdit = user?.id === channelData.channel.ownerId;
+  // D-015: owner 또는 story_permissions.editor 부여받은 사용자도 편집 가능.
+  // owner 체크가 미스되면 추가로 권한 row 조회 (대부분의 경우 두 번째 쿼리 발생 안 함).
+  const isOwner = user?.id === channelData.channel.ownerId;
+  const hasEditorPermission =
+    !isOwner && user ? await hasStoryEditPermission({ storyId: story.id, userId: user.id }) : false;
+  const canEdit = isOwner || hasEditorPermission;
 
   // 참여 기록은 페이지 렌더와 무관 (UI 에 안 보임) → fire-and-forget 으로 진입 차단 X.
   // 에러는 콘솔에만 남기고 페이지는 정상 렌더.

@@ -1,6 +1,6 @@
 'use client';
 
-import type { Editor } from 'tldraw';
+import type { Editor } from '@/lib/editor';
 import type { PresenceState } from '@/lib/hooks/useStoryRealtime';
 
 interface PresenceLayerProps {

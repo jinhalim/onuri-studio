@@ -1,6 +1,6 @@
 'use client';
 
-import { useValue, type Editor, type TLShape } from 'tldraw';
+import { useValue, type Editor, type TLShape } from '@/lib/editor';
 
 // 노트(메모지) 도형 하단 우측에 작성자(by 사용자) 라벨을 표시하는 오버레이.
 // 작성자 정보는 shape.meta.createdBy 에서 읽어옴 (StudioCanvas 가 생성 시 자동 stamp).

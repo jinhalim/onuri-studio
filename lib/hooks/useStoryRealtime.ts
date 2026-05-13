@@ -19,6 +19,13 @@ export interface PresenceState {
   color: string;
   cursor: { x: number; y: number } | null; // tldraw page coords
   isDrawing: boolean;
+  /**
+   * 마지막으로 track() 된 시각 (ms epoch).
+   * Supabase Realtime 은 CLOSED→재구독 사이클에서 stale presence 가
+   * 잠시 남아있을 수 있다. 같은 userId 의 여러 엔트리 중 freshest 를 골라야
+   * 옛 `isDrawing: true` 가 새로운 `false` 를 가리지 않는다.
+   */
+  updatedAt: number;
 }
 
 export interface SyncPayload {
@@ -75,9 +82,17 @@ export interface UseStoryRealtimeResult {
   broadcastCursor: (point: Omit<CursorPayload, 'fromUserId'>) => void;
   /** 본인 presence (그리는 중 상태 등) 갱신. cursor 는 broadcastCursor 사용. */
   updatePresence: (partial: Partial<Omit<PresenceState, 'userId' | 'nickname' | 'color'>>) => void;
-  /** 채널 연결 상태. UI 디버깅용. */
-  status: 'connecting' | 'connected' | 'closed' | 'error';
+  /**
+   * 채널 연결 상태.
+   * - 'overflow': 정원 초과 — 즉시 untrack 후 사용자가 다시 시도해야 입장 가능.
+   */
+  status: 'connecting' | 'connected' | 'closed' | 'error' | 'overflow';
 }
+
+// 스토리 화이트보드 1개당 동시 접속 정원.
+// Quick wins + throttle 조정 후 안정 운영 가능한 상한.
+// 50명 운영이 필요해지면 Yjs CRDT 마이그레이션으로 이행 (DESIGN.md § 17.9 참고).
+export const MAX_STORY_PRESENCES = 25;
 
 export function useStoryRealtime({
   storyId,
@@ -93,12 +108,15 @@ export function useStoryRealtime({
   // Supabase Realtime SDK 가 미준비 채널에서 send 호출 시 REST fallback 하면서
   // deprecation warning 발생 → ready 일 때만 send 호출해서 warning + 불필요한 REST 호출 차단.
   const isReadyRef = useRef(false);
+  // overflow 상태 ref 미러 — subscribe 콜백에서 자동 재시도 결정용.
+  const overflowRef = useRef(false);
   const presenceRef = useRef<PresenceState>({
     userId: user.id,
     nickname: user.nickname,
     color: user.color,
     cursor: null,
     isDrawing: false,
+    updatedAt: Date.now(),
   });
   const onSyncRef = useRef(onSync);
   const onLaserRef = useRef(onLaser);
@@ -146,7 +164,6 @@ export function useStoryRealtime({
     }
 
     const topic = `story:${storyId}`;
-    console.log('[useStoryRealtime] 채널 구독 시작:', topic, '(user:', user.nickname, ')');
 
     const channel = supabase.channel(topic, {
       config: {
@@ -158,60 +175,47 @@ export function useStoryRealtime({
     channel
       .on('broadcast', { event: 'sync' }, ({ payload }) => {
         if (!payload || typeof payload !== 'object') return;
-        const p = payload as SyncPayload;
-        if (p.fromUserId === user.id) return; // 안전망 (broadcast.self=false 무시되는 경우 대비)
-        console.log('[useStoryRealtime] ← broadcast 수신:', {
-          from: p.fromUserId,
-          added: p.added?.length ?? 0,
-          updated: p.updated?.length ?? 0,
-          removed: p.removed?.length ?? 0,
-        });
-        onSyncRef.current(p);
+        onSyncRef.current(payload as SyncPayload);
       })
       .on('broadcast', { event: 'laser' }, ({ payload }) => {
         if (!payload || typeof payload !== 'object') return;
-        const p = payload as LaserPayload;
-        if (p.fromUserId === user.id) return;
-        onLaserRef.current?.(p);
+        onLaserRef.current?.(payload as LaserPayload);
       })
       .on('broadcast', { event: 'cursor' }, ({ payload }) => {
         if (!payload || typeof payload !== 'object') return;
-        const p = payload as CursorPayload;
-        if (p.fromUserId === user.id) return;
-        onCursorRef.current?.(p);
-      })
-      // 시스템 이벤트(연결/끊김/오류) 가시화 — 디버깅용
-      .on('system', {}, (payload: unknown) => {
-        console.log('[useStoryRealtime] system event:', payload);
+        onCursorRef.current?.(payload as CursorPayload);
       })
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState<PresenceState>();
-        // 같은 user.id 가 여러 탭으로 접속하면 배열 길이가 N. userId 단위로 dedupe.
-        // 여러 탭 중 그리는 중인 탭이 있으면 그쪽을 우선 채택.
+        // 같은 user.id 가 여러 엔트리로 보일 수 있다 (멀티탭 정상 / CLOSED→재구독
+        // 사이클에서 stale entry 비정상). updatedAt 기준 freshest 우선 dedupe.
         const dedupedMap = new Map<string, PresenceState>();
         for (const p of Object.values(state).flat()) {
           const existing = dedupedMap.get(p.userId);
-          if (!existing) {
-            dedupedMap.set(p.userId, p);
-          } else if (p.isDrawing && !existing.isDrawing) {
+          if (!existing || (p.updatedAt ?? 0) > (existing.updatedAt ?? 0)) {
             dedupedMap.set(p.userId, p);
           }
         }
         const list = Array.from(dedupedMap.values());
-        console.log(
-          '[useStoryRealtime] presence sync:',
-          list.length,
-          '명 접속 (raw',
-          Object.values(state).flat().length,
-          ')',
-        );
+
+        // 정원 검사: 본인이 이미 dedupedMap 에 포함됐고 총원이 MAX 초과면
+        // 내가 마지막에 들어와 정원을 넘긴 사람 → 즉시 untrack + overflow 상태 알림.
+        // Race window 가 있어서 동시 입장 시 N 명까지 잠시 초과할 수 있지만 곧 해소.
+        const includesMe = dedupedMap.has(user.id);
+        if (includesMe && list.length > MAX_STORY_PRESENCES) {
+          void channel.untrack();
+          isReadyRef.current = false;
+          overflowRef.current = true;
+          if (!cancelled) {
+            setStatus('overflow');
+            setPresences([]);
+          }
+          return;
+        }
+
         if (!cancelled) setPresences(list);
       })
-      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        console.log('[useStoryRealtime] → join:', key, newPresences);
-      })
       .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-        console.log('[useStoryRealtime] ← leave:', key, leftPresences);
         // 떠난 사용자의 보조 state (cursor 등) 정리 — 메모리 절약 + 즉시 사라짐
         const ids = new Set<string>();
         if (typeof key === 'string') ids.add(key);
@@ -224,20 +228,13 @@ export function useStoryRealtime({
 
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const scheduleRetry = (delayMs: number, reason: string) => {
+    const scheduleRetry = (delayMs: number) => {
       if (cancelled) return;
       if (retryCountRef.current >= MAX_RETRIES) {
-        console.error(
-          `[useStoryRealtime] 최대 재시도 ${MAX_RETRIES}회 초과 — 자동 재구독 중단 (사용자가 새로고침 필요)`,
-        );
+        console.error('[useStoryRealtime] 최대 재시도 초과 — 사용자가 새로고침 필요');
         return;
       }
       const wait = delayMs * Math.pow(1.5, retryCountRef.current); // exponential backoff
-      console.warn(
-        `[useStoryRealtime] ${reason} → ${Math.round(wait)}ms 후 새 channel 으로 재구독 (시도 ${
-          retryCountRef.current + 1
-        }/${MAX_RETRIES})`,
-      );
       if (retryTimer) clearTimeout(retryTimer);
       retryTimer = setTimeout(() => {
         if (cancelled) return;
@@ -247,33 +244,37 @@ export function useStoryRealtime({
       }, wait);
     };
 
-    channel.subscribe(async (subscribeStatus, err) => {
+    channel.subscribe(async (subscribeStatus) => {
       if (cancelled) return;
-      console.log('[useStoryRealtime] subscribe status:', subscribeStatus, err ?? '');
       if (subscribeStatus === 'SUBSCRIBED') {
         retryCountRef.current = 0; // 성공 시 카운터 리셋
         isReadyRef.current = true; // send 허용
         setStatus('connected');
-        const trackResult = await channel.track(presenceRef.current);
-        console.log('[useStoryRealtime] track 결과:', trackResult);
+        // 재구독 시 stale entry 보다 fresh 하게 보이도록 updatedAt 갱신.
+        presenceRef.current = { ...presenceRef.current, updatedAt: Date.now() };
+        await channel.track(presenceRef.current);
         // 첫 SUBSCRIBED 는 초기 연결, 두 번째 이상은 재연결.
         // 재연결 시 호출자(StoryWorkspace)가 서버 snapshot 재로드해서
         // missing broadcast 들을 회복할 수 있게 알림.
         if (hasSubscribedOnceRef.current) {
-          console.log('[useStoryRealtime] 재연결 감지 → onReconnect 호출');
           onReconnectRef.current?.();
         }
         hasSubscribedOnceRef.current = true;
       } else if (subscribeStatus === 'CLOSED') {
         if (!cancelled) {
           isReadyRef.current = false;
+          // overflow 로 untrack 한 경우 자동 재시도 안 함 — 사용자가 수동으로 다시 시도.
+          if (overflowRef.current) {
+            setStatus('overflow');
+            return;
+          }
           setStatus('closed');
-          scheduleRetry(1500, 'CLOSED 수신');
+          scheduleRetry(1500);
         }
       } else if (subscribeStatus === 'CHANNEL_ERROR' || subscribeStatus === 'TIMED_OUT') {
         isReadyRef.current = false;
         setStatus('error');
-        scheduleRetry(3000, `${subscribeStatus} 수신`);
+        scheduleRetry(3000);
       }
     });
 
@@ -283,47 +284,105 @@ export function useStoryRealtime({
       cancelled = true;
       isReadyRef.current = false;
       if (retryTimer) clearTimeout(retryTimer);
+      // 남은 broadcast buffer 가 있으면 즉시 flush — 페이지 떠나기 전 마지막 변경 전송.
+      if (broadcastTimerRef.current) {
+        clearTimeout(broadcastTimerRef.current);
+        broadcastTimerRef.current = null;
+        // isReadyRef = false 라 실제 send 는 skip 되지만 buffer 정리는 됨.
+      }
       channel.unsubscribe();
       channelRef.current = null;
     };
     // retryTick 변화 시 새 channel 인스턴스 생성 (Supabase 제약 우회)
   }, [storyId, user.id, user.nickname, user.color, retryTick]);
 
+  // A3: broadcast 송신을 50ms window 로 batch.
+  // 매 store change 마다 즉시 송신 → 50명 동시 편집 시 broadcast 폭주 + 수신측 re-render 폭주.
+  // 50ms window 안의 변경을 누적 후 1번 송신. 같은 record id 의 updated 는 마지막 것만 (dedupe).
+  // 50ms 는 사용자 체감 거의 없음 (~20fps, cursor throttle 과 동급).
+  const broadcastBufferRef = useRef<{
+    added: Map<string, unknown>;
+    updated: Map<string, unknown>;
+    removed: Set<string>;
+  }>({
+    added: new Map(),
+    updated: new Map(),
+    removed: new Set(),
+  });
+  const broadcastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushBroadcastBuffer = useCallback(() => {
+    broadcastTimerRef.current = null;
+    const channel = channelRef.current;
+    if (!channel || !isReadyRef.current) {
+      // ready 아니면 버퍼만 초기화 (재시도 안 함 — 다음 변경 + autosave 로 자연 회복)
+      broadcastBufferRef.current = {
+        added: new Map(),
+        updated: new Map(),
+        removed: new Set(),
+      };
+      return;
+    }
+    const buf = broadcastBufferRef.current;
+    if (buf.added.size === 0 && buf.updated.size === 0 && buf.removed.size === 0) return;
+    const payload: SyncPayload = {
+      fromUserId: user.id,
+      added: buf.added.size > 0 ? Array.from(buf.added.values()) : undefined,
+      updated: buf.updated.size > 0 ? Array.from(buf.updated.values()) : undefined,
+      removed: buf.removed.size > 0 ? Array.from(buf.removed) : undefined,
+    };
+    broadcastBufferRef.current = {
+      added: new Map(),
+      updated: new Map(),
+      removed: new Set(),
+    };
+    void channel.send({ type: 'broadcast', event: 'sync', payload });
+  }, [user.id]);
+
   const broadcast = useCallback(
     (changes: Omit<SyncPayload, 'fromUserId'>) => {
-      const channel = channelRef.current;
-      if (!channel) {
-        console.warn('[useStoryRealtime] broadcast 호출됐으나 channel null');
-        return;
-      }
-      // 채널 SUBSCRIBED 아니면 skip — SDK 의 REST fallback + deprecation warning 회피.
-      // 손실은 다음 변경 (last-write-wins) + 1.5s 자동저장으로 자연 회복.
       if (!isReadyRef.current) return;
-      console.log('[useStoryRealtime] → broadcast 송신:', {
-        added: changes.added?.length ?? 0,
-        updated: changes.updated?.length ?? 0,
-        removed: changes.removed?.length ?? 0,
-      });
-      void channel
-        .send({
-          type: 'broadcast',
-          event: 'sync',
-          payload: { fromUserId: user.id, ...changes } satisfies SyncPayload,
-        })
-        .then((result) => {
-          if (result !== 'ok') {
-            console.warn('[useStoryRealtime] broadcast send 결과:', result);
+      const buf = broadcastBufferRef.current;
+      // 같은 record id 의 added/updated 는 최신 것만 유지 (Map.set 으로 덮어쓰기).
+      // record.id 추출 — added/updated 는 객체이고 보통 .id 속성 있음.
+      if (changes.added) {
+        for (const r of changes.added) {
+          const id = (r as { id?: string }).id;
+          if (id) {
+            buf.added.set(id, r);
+            buf.updated.delete(id); // 새로 added 면 이전 updated 무시
           }
-        });
+        }
+      }
+      if (changes.updated) {
+        for (const r of changes.updated) {
+          const id = (r as { id?: string }).id;
+          if (id && !buf.added.has(id)) {
+            buf.updated.set(id, r); // 이미 added 큐에 있으면 add 가 최종 — updated 무시
+          }
+        }
+      }
+      if (changes.removed) {
+        for (const id of changes.removed) {
+          buf.removed.add(id);
+          buf.added.delete(id); // remove 가 최종 — add/update 무시
+          buf.updated.delete(id);
+        }
+      }
+      // 이미 timer 가 돌고 있으면 추가 schedule 안 함.
+      if (broadcastTimerRef.current === null) {
+        broadcastTimerRef.current = setTimeout(flushBroadcastBuffer, 50);
+      }
     },
-    [user.id],
+    [flushBroadcastBuffer],
   );
 
   const updatePresence = useCallback(
     (partial: Partial<Omit<PresenceState, 'userId' | 'nickname' | 'color'>>) => {
       const channel = channelRef.current;
       if (!channel) return;
-      presenceRef.current = { ...presenceRef.current, ...partial };
+      // updatedAt 을 항상 갱신해서 stale entry 와 구분되게 한다 (dedupe freshest-wins).
+      presenceRef.current = { ...presenceRef.current, ...partial, updatedAt: Date.now() };
       void channel.track(presenceRef.current);
     },
     [],
@@ -359,8 +418,9 @@ export function useStoryRealtime({
     [user.id],
   );
 
-  // Keep-alive: 20초마다 빈 broadcast 송신해서 idle timeout 방지.
-  // Supabase Realtime free tier 에서 idle 채널이 빠르게 닫히는 현상 완화.
+  // Keep-alive: 주기적 빈 broadcast 로 idle timeout 방지.
+  // Supabase Realtime free tier 의 idle 채널 종료 회피. 50명 동시 접속 환경에선
+  // 너무 짧으면 메시지 카운트 폭증 → 45초로 늘림 (idle timeout ~60s 이내).
   useEffect(() => {
     if (status !== 'connected') return;
     const interval = window.setInterval(() => {
@@ -371,7 +431,7 @@ export function useStoryRealtime({
         event: 'keepalive',
         payload: { ts: Date.now() },
       });
-    }, 20_000);
+    }, 45_000);
     return () => window.clearInterval(interval);
   }, [status]);
 

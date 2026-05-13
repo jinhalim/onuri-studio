@@ -97,14 +97,17 @@ function Avatar({ presence, isSelf }: { presence: PresenceState; isSelf: boolean
         <span
           role="tooltip"
           className={cn(
-            'pointer-events-none absolute left-1/2 top-full z-[60] mt-2 -translate-x-1/2',
-            // truncate 보다는 max-w + 가로 wrap (길어도 잘리지 않게)
-            'max-w-[200px] rounded-md border border-divider bg-brand-bezel px-2.5 py-1.5',
-            'text-[11px] font-medium text-fg shadow-xl ring-1 ring-black/30',
+            // top-full → avatar 아래쪽에 표시. 헤더의 isolation: isolate + z-[1000] 안에서
+            // 그려지므로 z-50 만으로도 캔버스 도형(z-300) 위에 안전하게 올라간다.
+            // 모달(z-[100], fixed inset-0)은 body 레벨 stacking context 라서 자연히 더 위.
+            'pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2',
+            // w-max + whitespace-nowrap → 내용 길이만큼 가로로 펼쳐짐 (세로 줄바꿈 방지).
+            'w-max max-w-[280px] whitespace-nowrap rounded-md border border-divider bg-brand-bezel px-3 py-2',
+            'text-xs font-medium text-fg shadow-xl ring-1 ring-black/30',
           )}
         >
           <span style={{ color: presence.color }}>●</span> {label}
-          {presence.isDrawing && <span className="ml-1 text-rec">· 그리는 중</span>}
+          {presence.isDrawing && <span className="ml-1.5 text-rec">· 그리는 중</span>}
         </span>
       )}
     </span>

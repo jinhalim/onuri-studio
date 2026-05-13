@@ -6,6 +6,7 @@ import { ChannelList } from '@/components/channel/ChannelList';
 import { HistoryChannelCard } from '@/components/me/HistoryChannelCard';
 import { NicknameEditInline } from '@/components/me/NicknameEditInline';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { NotificationBell } from '@/components/notification/NotificationBell';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
 import { ProviderBadge } from '@/components/auth/ProviderBadge';
 import { enabledProviders } from '@/lib/infra/auth/provider-registry';
@@ -50,6 +51,7 @@ export default async function MyPage() {
           <Wordmark size="sm" />
         </Link>
         <div className="flex items-center gap-3">
+          <NotificationBell userId={user.id} />
           <SignedInBanner user={user} compact />
           <ThemeToggle />
         </div>

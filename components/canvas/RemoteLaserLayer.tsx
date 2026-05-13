@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Editor } from 'tldraw';
+import type { Editor } from '@/lib/editor';
 
 const FADE_AFTER_MS = 1500;
 const BASE_STROKE_WIDTH = 4;

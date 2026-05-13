@@ -1,4 +1,4 @@
-import type { Editor } from 'tldraw';
+import type { Editor } from '@/lib/editor';
 import type { OnuriFile } from '@/lib/domain/onuri-file';
 
 // 현재 페이지의 도형을 PNG/SVG/.onuri.json 파일로 내보내기.

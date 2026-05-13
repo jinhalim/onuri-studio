@@ -944,6 +944,9 @@ provider.destroy() + 마지막 스냅샷 flush
 | 2026-05-11 | D-012 | **라이트 모드 추가** | `html[data-theme="light"]` CSS 변수 분기로 다크 13색 → 라이트 대응색 정의. `<head>` 인라인 bootstrap 스크립트로 first paint 전 적용 (flash 방지). 영속화: localStorage('theme') + cookie('theme'). 헤더에 sun/moon `ThemeToggle`. 스토리(화이트보드) 페이지는 `ForceDarkTheme` 으로 다크 강제. accent (`--accent-rec`, `--accent-live`) 두 모드 공유. | CLAUDE.md §2 의 "다크 모드 우선" 을 "다크 default + 라이트 선택 가능" 으로 완화. tldraw 캔버스 자체는 이미 자체 colorMode 가지므로 dark 고정으로 충돌 회피. |
 | 2026-05-12 | D-013 | **Google SSO 활성화** (O-012/O-016 부분 해결) | provider abstraction (Phase 1 부터 준비) 의 `google-provider.ts` 활성화. Supabase `signInWithOAuth({ provider: 'google' })` + `/auth/callback` 라우트로 OAuth code 교환. 익명 트랙은 그대로 병행 유지 (사용자 선택). Google 로그인 직후 `/auth/setup-nickname` 으로 닉네임 입력 (익명과 동일 UX). 익명 흔적은 Google 계정에 흡수: `anonymous_sessions.converted_user_id` 연결 + `channels.owner_id`/`participations.user_id` 등을 Google user 로 transfer. | CLAUDE.md §11 Phase 7 SSO 를 Phase 6 단계에서 일부 조기 도입. 익명/Google 병행으로 진입 장벽 낮춤. 이메일 매직링크는 D-EMAIL 로 Phase 9 까지 보류 유지. |
 | 2026-05-12 | D-014 | **사용자 유형별 권한 정책** | **익명 사용자**: (a) middleware 가 미인증 사용자를 메인 페이지 (`/`) 로 redirect, `next` 쿼리에 원래 URL 보존 → 닉네임 입력 후 자동 이동. (b) 나가기 클릭 시 확인 모달 — "Google 연동" → `/me` 또는 "데이터 삭제" → cascade 삭제 (`auth.users` 삭제로 `users`/`channels`/`participations`/`stories` 모두 cleanup). (c) 비-owner 채널에서 ExportButton 숨김. **Google 회원**: admin 제외 전체 기능 (export/import 모두 허용 — 비-owner 채널도 export 가능). 나가기 시 세션만 종료, 데이터 영구 보존 — 단순 확인 모달만. | CLAUDE.md §5 의 "Could (확장)" 채널 권한 시스템의 일부 — 익명/회원 차별화 + 데이터 명시적 삭제. O-015 의 핵심인 "편집 권한 요청·부여" 는 여전히 보류. |
+| 2026-05-13 | D-015 | **수정 권한 요청/승인 + 알림 inbox** (O-015 부분 해결) | **스토리 단위 / 영구 / DB 보관**. 비-owner 사용자(익명 닉네임 또는 Google) 가 스토리 페이지 우상단 "읽기 전용" 배지를 클릭 → `requestEditPermissionAction` → owner 의 inbox 에 `edit_request` 알림 INSERT + broadcast push. owner 가 알림 클릭 → `EditRequestDialog` (허용/차단) → 허용 시 `story_permissions` 에 `(story_id, user_id, role='editor')` upsert + 요청자에게 `edit_request_approved` 알림. 요청자가 그 알림 클릭 → `window.location.assign` 으로 전체 페이지 리로드 → `canEdit = isOwner \|\| hasStoryEditPermission` 재계산 → 편집 모드. 구현 메모 [§ 17.6](#176-d-015-수정-권한-요청-및-알림-시스템-구현-메모). | CLAUDE.md §5 "Could" 채널 권한 시스템 중 가장 핵심인 "수정 권한 요청/부여" 만 스토리 단위로 도입. 채널 단위 권한 / 대표 이미지 등은 별도 결정 필요. |
+| 2026-05-13 | D-016 | **tldraw Hobby License attribution + Editor abstraction L1** | **라이선스 attribution**: README "📜 라이선스" 섹션 + [§ 17.7](#177-tldraw-라이선스-가이드) 라이선스 가이드 + 랜딩 페이지 푸터 ("Built with tldraw (Hobby License) · Non-commercial use only"). **L1 abstraction**: `lib/editor/index.ts` 신설로 tldraw 의 사용 표면 (components / hooks / shape utils / types) 을 한곳에 명시적 re-export. 9개 캔버스 관련 소비처는 `@/lib/editor` 만 import → tldraw 직접 import 는 `lib/editor/index.ts` + StudioCanvas CSS side-effect 두 곳만 남음. 미래 editor 교체 (Excalidraw / 자체 canvas 등) 검토 시 본 파일에 동일 시그니처 adapter 작성으로 swap 가능. 구현 메모 [§ 17.8](#178-editor-교체-대비-abstraction-가이드). | CLAUDE.md §13 ("예산 $0", "MIT 호환 라이선스 우선") 의 운영 가이드 구체화. 상업화 결정 시점에 SDK License 구매 OR alternative editor 로 swap. |
+| 2026-05-13 | D-017 | **Realtime sync hardening + per-story 정원 제한** | 누적된 sync 코드 정리 + 데이터 손실 quick wins + 50명 대비 throttle 조정 + 정원 cap. 구현 메모 [§ 17.9](#179-d-017-realtime-sync-hardening-구현-메모). | CLAUDE.md §8 (Realtime D-010) + §9 ("한 스토리당 20명") 갱신 — 25명 cap + 50명 운영 시 Yjs CRDT 이행. |
 
 ### 17.2 D-007 색상 충돌 회피 알고리즘 상세
 
@@ -1005,6 +1008,45 @@ const CustomNoteShapeUtil = NoteShapeUtil.configure({
 
 **부수 효과**: 작은 화면에서 일부 팔레트 swatch 클릭이 잘 안되는 hit-box 이슈는 globals.css 에 `min-width/min-height: 24px` 추가로 보완 + 임의 색 picker 가 우회로 제공.
 
+### 17.6 D-015 수정 권한 요청 및 알림 시스템 구현 메모
+
+**데이터 모델** (migration `0010_permissions_and_notifications.sql`):
+
+```sql
+public.story_permissions (
+  id, story_id, user_id, role='editor', granted_by, granted_at,
+  unique (story_id, user_id)
+)
+public.notifications (
+  id, recipient_user_id,
+  type in ('edit_request', 'edit_request_approved', 'edit_request_denied'),
+  payload jsonb, read_at, created_at
+)
+```
+
+`stories` 의 RLS `stories_owner_write` 를 owner OR editor 권한자 모두 허용으로 확장 (`with check` 도 동일). `notifications` 는 본인만 read/update/delete (RLS), write 는 admin client 전용.
+
+**서버 액션** (`app/actions/`):
+
+- `request-edit-permission.ts` — visitor → owner. `already_granted` (이미 권한 보유) / `already_pending` (24시간 내 미읽음 요청 존재) dedupe.
+- `approve-edit-request.ts` — owner 가 승인. `upsert(story_permissions)` + 원본 `edit_request` read 처리 + 요청자에게 `edit_request_approved` INSERT.
+- `deny-edit-request.ts` — 권한 부여 없이 거절 알림만 INSERT.
+- `mark-notification-read.ts` — 본인 알림 read 처리.
+- `list-my-notifications.ts` — 최근 50개 초기 fetch (admin client → RLS 우회, server-side 본인 user_id 필터).
+
+**Realtime push — 왜 broadcast 인가**: 익명 사용자는 클라이언트 Supabase 세션이 없다 (`anonymous-provider.ts` 가 `auth.admin.createUser` 만 호출, 브라우저 `sb-*` 쿠키 없음). 따라서 `auth.uid()` 가 NULL → Postgres Changes 및 RLS-protected 직접 SELECT 가 모두 차단. 우회로 `lib/infra/realtime/broadcast-server.ts` 가 REST `/realtime/v1/api/broadcast` 엔드포인트로 service key 인증 broadcast 전송. 클라이언트는 `user-notifications:{userId}` 채널 구독, broadcast payload 는 메타만 (`notificationId`, `type`) — 본문은 `listMyNotificationsAction` 으로 refetch.
+
+**컴포넌트**:
+
+- `RequestEditButton` — 우상단 "읽기 전용" 배지 교체. 클릭 시 `requestEditPermissionAction` 호출. 4가지 시각 상태 (idle / pending / requested / granted / error).
+- `NotificationBell` — 헤더에 종 아이콘 + 미확인 카운트 빨간 도트. 모든 페이지 (랜딩 / 채널 / 스토리 / 마이페이지) 헤더에 배치.
+- `NotificationDropdown` — 알림 리스트. type 별 아이콘/문구/액션 분기.
+- `EditRequestDialog` — owner 가 `edit_request` 클릭 시 뜨는 허용/차단 모달.
+
+**Editor 동기화**: 승인 알림 클릭 시 `window.location.assign(storyUrl)` 으로 전체 페이지 리로드 (router.refresh 는 React state 보존 → tldraw editor 의 `isReadonly` 초기 mount 설정이 stale 닫힘 회피). 추가로 `StudioCanvas` 에 `useEffect([canEdit])` 으로 `editor.updateInstanceState({ isReadonly: !canEdit })` 동기화 effect 추가 (defense-in-depth).
+
+**Save 권한 검증**: `lib/usecases/save-story-snapshot.ts` 에 `hasStoryEditPermission` 체크 추가. owner 아니어도 editor 면 통과.
+
 ### 17.4 미해결 결정 (사용자 검토 대기)
 
 | # | 항목 | 결정 시점 | 비고 |
@@ -1014,8 +1056,200 @@ const CustomNoteShapeUtil = NoteShapeUtil.configure({
 | O-012 | SSO 우선순위 (Google만 / Google+GitHub / 4종) | Phase 7 시작 전 | |
 | O-013 | Google Workspace 통합 깊이 (임베드만 / 양방향 / 전체 동기화) | Phase 8 시작 전 | |
 | O-014 | 이메일 발신자 표기 (`noreply@` / `hello@` / `studio@`) | Phase 9 도메인 인증 시 | |
-| O-015 | 채널 권한 시스템 (수정 권한 요청·알림 inbox·익명/로그인 구분·대표 이미지) | MVP 후 또는 인증 결정 후 | C 그룹 검토 후 보류. CLAUDE.md §5 Could 항목 |
+| ~~O-015~~ | ~~채널 권한 시스템~~ | **D-015 부분 해결 (스토리 단위 수정 권한 요청/승인)** | 채널 단위 권한 / 대표 이미지 등은 별도 결정 필요 |
 | O-016 | 인증 방식 — 이메일 매직 링크 대신 다른 방식 (SSO 등) 검토 | O-012 와 함께 | 사용자 의사로 이메일 매직 링크 활성화 보류 |
+
+### 17.7 tldraw 라이선스 가이드
+
+#### 라이선스 종류
+
+| 라이선스 | 비용 | 제약 | 워터마크 |
+| --- | --- | --- | --- |
+| **Hobby License** | 무료 | **비상업적만** (개인 학습 / 포트폴리오 / 비영리 OSS / 교육) | tldraw 3.x 부터 포함 |
+| **SDK License (상업)** | 연간 정액, 협상 (수천 USD/년 수준) | 자유 | 제거됨 |
+
+> 공식 페이지: <https://tldraw.dev/community/license>. 문의: `license@tldraw.com`
+
+#### "상업적 사용" 의 정의 (실무 기준)
+
+다음 중 하나라도 해당하면 **상업 사용** 으로 간주, SDK License 필요:
+
+- 수익 발생 (직접: 구독/판매, 간접: 광고/후원/데이터)
+- 법인 (회사) 이 운영 또는 사용 — 무료 서비스여도 상업
+- 회사 내부 도구로 사용 (외부 판매 X 여도 영리 활동의 일부)
+- 본인 사업의 부수 도구 (포트폴리오 → 채용 → 회사 인수 등으로 전환되는 시점)
+
+다음은 **Hobby** 로 유지 가능:
+
+- 개인 학습 / 취미 프로젝트, 수익 0
+- 졸업작품 / 학교 과제
+- 비영리 OSS 데모 (수익화 없음)
+- 개인 포트폴리오 (수익 0, 본인 사이트)
+
+회색 지대 (NPO / 정부기관 / 사회적 기업 / 후원 모델 등) 는 `license@tldraw.com` 사전 문의 권장.
+
+#### Onuri Studio 의 현재 위치
+
+- 사용자 본인 1명, 수익 0, 학습/포트폴리오 용도 → **Hobby License 명백히 OK**
+- 상업화 전환 시점 (자가 진단 3가지: 수익 의도 / 법인 운영 / 제3자 수익 — 셋 중 하나라도 yes) 도달 시 SDK License 협상 필요
+
+#### 상업화 시 대안
+
+SDK License 비용이 부담스러우면 editor 자체를 교체 고려:
+
+| 대안 | 라이선스 | tldraw 대비 기능 |
+| --- | --- | --- |
+| [Excalidraw](https://github.com/excalidraw/excalidraw) | MIT (상업 자유) | 손그림 느낌, 기능 단순, 동시편집 자체 약함 |
+| [Konva](https://konvajs.org) / [Fabric.js](http://fabricjs.com) | MIT / MIT | 캔버스 라이브러리, UI/UX 직접 구현 필요 |
+| 자체 canvas (SVG / HTML5) | 자유 | 구현 부담 매우 큼 |
+
+교체는 본격 코드 수정이라 [§ 17.8](#178-editor-교체-대비-abstraction-가이드) 의 abstraction layer 가 있는 만큼 작업량이 달라짐.
+
+#### 안전한 운영 가이드
+
+1. README + 앱 푸터 + 코드 주석에 라이선스 표기 (이 문서 + `README.md` "📜 라이선스" 섹션)
+2. 수익화 1개월 전 tldraw 팀에 사전 문의 (협상 시간 확보)
+3. 워터마크 제거 시점도 라이선스 구매 시점과 동일
+4. 회색지대 진입 (후원 시작 / 회사 인수 / 광고 도입) 즉시 메일 문의
+5. Excalidraw 등 MIT 대안으로 fallback 가능하게 코드 추상화 ([§ 17.8](#178-editor-교체-대비-abstraction-가이드))
+
+### 17.8 Editor 교체 대비 abstraction 가이드
+
+> **현재 상태: L1 (Import 중앙화) 적용 완료** — D-016 (2026-05-13).
+> [`lib/editor/index.ts`](lib/editor/index.ts) 가 tldraw 의 사용 표면을 명시적 re-export.
+> 9개 캔버스 관련 소비처 (`StudioCanvas.tsx`, `customShapeUtils.ts`, `CustomStylePanel.tsx`, `NoteAuthorLayer.tsx`, `PresenceLayer.tsx`, `RemoteLaserLayer.tsx`, `export-image.ts`, `ExportButton.tsx`, `StoryWorkspace.tsx`) 가 `@/lib/editor` 만 import.
+> tldraw 직접 import 는 본 abstraction 파일 + `StudioCanvas.tsx` 의 CSS side-effect (`import 'tldraw/tldraw.css'`) 두 곳만 남음.
+
+#### 현재 tldraw 결합 표면 (touchpoint inventory)
+
+L1 abstraction 도입으로 의존 표면은 한곳에 모였지만, **shape 모델 / 스타일 패널 / export API 등 도메인 로직 자체는 여전히 tldraw 특화**. 분포:
+
+| 영역 | 파일 | tldraw 의존도 |
+| --- | --- | --- |
+| 캔버스 마운트 | [`components/canvas/StudioCanvas.tsx`](components/canvas/StudioCanvas.tsx) | 매우 높음 — `<Tldraw>` 컴포넌트, `Editor` 인스턴스, `editor.store.listen`, `editor.getSnapshot`, `editor.loadSnapshot` 직접 호출 |
+| 커스텀 도형 | [`components/canvas/customShapeUtils.ts`](components/canvas/customShapeUtils.ts) | 매우 높음 — `NoteShapeUtil` 등 ShapeUtil `.configure` 패턴 |
+| 커스텀 스타일 패널 | [`components/canvas/CustomStylePanel.tsx`](components/canvas/CustomStylePanel.tsx) | 매우 높음 — tldraw `DefaultStylePanel`, `StylePanelColorPicker` 등 |
+| 노트 작성자 라벨 | [`components/canvas/NoteAuthorLayer.tsx`](components/canvas/NoteAuthorLayer.tsx) | 매우 높음 — `editor.getShapesById`, `useValue` |
+| 레이저 / 커서 오버레이 | [`components/canvas/PresenceLayer.tsx`](components/canvas/PresenceLayer.tsx) / `RemoteLaserLayer.tsx` | 중간 — 좌표 변환에 `editor.pageToScreen` 사용 |
+| 실시간 sync | [`components/story/StoryWorkspace.tsx`](components/story/StoryWorkspace.tsx) `handleRemoteSync` | 중간 — `TLRecord` 타입, `store.put` / `store.remove` |
+| broadcast 페이로드 | [`lib/hooks/useStoryRealtime.ts`](lib/hooks/useStoryRealtime.ts) `SyncPayload` | 낮음 — 추상 record 타입으로 사용 중 (`unknown[]` 으로 선언) |
+| 내보내기/가져오기 | [`components/story/ExportButton.tsx`](components/story/ExportButton.tsx), `import-story.ts` | 매우 높음 — `editor.getSnapshot` / `editor.toSvg` 등 tldraw 전용 API |
+
+#### Abstraction 수준 옵션
+
+| 수준 | 작업량 | 효과 | 현재 상태 |
+| --- | --- | --- | --- |
+| **L0. Documentation only** | 0 | touchpoint 카탈로그만 — 교체 시 어디 손대야 하는지 명확 | ✅ 본 문서가 그 역할 |
+| **L1. Light — Import 중앙화** | 0.5일 | `lib/editor/index.ts` 를 신설해서 tldraw type 들을 re-export, 모든 소비처가 `@/lib/editor` 만 import. 향후 backend 교체 시 re-export 만 갈아끼우면 됨 (단, API shape 가 같을 때만 효과) | **✅ D-016 으로 완료** |
+| **L2. Medium — Adapter interface** | 2~3일 | `CanvasEditorAdapter` interface 정의 (mount, getSnapshot, loadSnapshot, listenChanges, applyRemoteChanges), tldraw adapter 1개 구현. 소비처는 interface 만 의존. 다른 editor 도입 시 adapter 1개 더 작성 | ⏳ 상업화 결정 시점에 재검토 |
+| **L3. Heavy — Full abstraction** | 1~2주 | 도형 모델, 스타일, presence, export 까지 모두 추상화. tldraw 의 기능 풍부함을 일부 잃을 가능성 | 🔒 보류 (over-engineering) |
+
+#### L1 구현 상세 ([`lib/editor/index.ts`](lib/editor/index.ts))
+
+명시적 re-export 패턴 — `export * from 'tldraw'` 대신 사용 중인 API 만 명시적으로 export 해서 의존 표면을 가시화:
+
+```ts
+// Components
+export { Tldraw, DefaultStylePanel, StylePanelColorPicker, ... } from 'tldraw';
+// Hooks
+export { useEditor, useValue } from 'tldraw';
+// Shape util base classes
+export { NoteShapeUtil, GeoShapeUtil, ArrowShapeUtil, ... } from 'tldraw';
+// Types
+export type { Editor, TLRecord, TLShape, TLComponents, TLUiStylePanelProps } from 'tldraw';
+```
+
+새 tldraw API 를 도입할 땐 반드시 본 파일에 export 추가 후 소비. 직접 `from 'tldraw'` import 는 새 코드에서 지양 (ESLint `no-restricted-imports` rule 로 강제 가능 — 현재는 컨벤션만).
+
+#### 권장 (D-016 이후 갱신)
+
+- **현재 (비상업, L1 완료)**: 더 추상화 없이 유지. 문서 + L1 으로 향후 swap 시점에 정보/표면이 모두 정리되어 있음.
+- **상업화 결정 시점**: 그때 선택한 alternative editor (Excalidraw / Konva / 자체) 의 API 를 보고 L2 adapter interface 설계. "그 editor 의 진짜 API" 를 알아야 추상화가 정확함 — 미리 만들면 wrong abstraction 위험.
+- **L3 는 영구 보류**: tldraw 자체 풍부함을 abstraction 으로 평탄화하면 가치를 잃음. 진짜 multi-backend 가 필요한 시점이 오기 전엔 부담만.
+
+#### Excalidraw 교체 시 예상 작업
+
+L1 abstraction 이 적용된 상태에서 swap 시 손대야 하는 항목:
+
+| 항목 | 변경 정도 | 비고 |
+| --- | --- | --- |
+| `lib/editor/index.ts` | **전면 재작성** | tldraw re-export → Excalidraw API 로 같은 시그니처 노출 (또는 adapter wrapping) |
+| `customShapeUtils.ts` | **전면 재작성** | Excalidraw 는 ShapeUtil 개념 없음 — 다른 customization API |
+| `CustomStylePanel.tsx` | **전면 재작성** | Excalidraw UI 슬롯 구조에 맞게 |
+| `NoteAuthorLayer.tsx` | **전면 재작성** | 좌표 변환 / shape 조회 API 다름 |
+| `PresenceLayer.tsx` | 중간 | `editor.pageToScreen` 등 좌표 변환만 다시 |
+| `RemoteLaserLayer.tsx` | 중간 | 좌표 변환 다시 |
+| `export-image.ts` + `ExportButton.tsx` | 중간 | Excalidraw 의 `.excalidraw` ↔ `.onuri.json` 매핑, `editor.toImage` 대체 API |
+| `StudioCanvas.tsx` | 중간 | mount / store.listen / snapshot 의 새 API 적용 |
+| `StoryWorkspace.tsx` | 작음 | `TLRecord` 가 abstract record type 으로 바뀌므로 type 만 영향 |
+| broadcast 페이로드 / Realtime sync | 작음 | record 직렬화 형식만 다름. `SyncPayload` 의 added/updated/removed 구조는 그대로 |
+| 기존 저장된 snapshot JSON | 마이그레이션 필요 | tldraw → Excalidraw 변환 스크립트 OR 신규 스토리만 새 editor 사용하고 기존은 read-only 유지 |
+
+실질 작업량 추정:
+- **L1 있을 때**: 1~2주 (L1 으로 의존 표면 가시화 → 작업 범위 추정/계획 용이)
+- **L1 없을 때**: 3~4주 (어디부터 손대야 하는지 찾는 시간만 며칠)
+
+### 17.9 D-017 Realtime sync hardening 구현 메모
+
+#### 배경
+
+D-010 (Supabase Realtime broadcast + tldraw store diff, last-write-wins) 기반 운영 중 사용자가 보고한 데이터 손실 패턴:
+
+1. **"내가 작성한 게 사라짐"** — owner 의 1.5초 autosave debounce 가 다른 사용자의 in-flight broadcast 도착 직전에 발화 → owner 의 로컬 snapshot (그 변경 누락된 상태) 이 DB 에 덮어쓰여서 영구 손실.
+2. **"동시 작업이 둘 다 사라짐"** — 위 + broadcast drop.
+3. **"버벅거림"** — store 변경마다 즉시 broadcast → N명 동시 편집 시 broadcast/수신측 re-render 폭주.
+4. **"재접속 후 작업 사라짐"** — `handleReconnect` 가 `loadSnapshot(parsed)` 로 store 전체 replace → disconnect 동안 로컬 변경 통째로 사라짐.
+
+추가 요구: 50명 동시 접속 목표지만 현재 인프라 (Supabase free tier) 에선 안정 운영 곤란 → **per-story 정원 25명 cap** 으로 안정성 우선, 50명 시점엔 Yjs CRDT 이행.
+
+#### 적용 변경
+
+**Phase 1 — Cleanup (누적 흔적 제거)**
+
+| 항목 | 위치 | 변경 |
+| --- | --- | --- |
+| 과도한 console.log | `useStoryRealtime`, `useChannelPresence`, `StudioCanvas`, `StoryWorkspace` | broadcast 송수신, presence sync, subscribe status, system event 로그 제거. 의미 있는 error 만 유지 |
+| 이중 fromUserId 안전망 | `useStoryRealtime` broadcast handlers | `broadcast.self=false` SDK 설정이 본인 메시지 차단 → 수동 `if (p.fromUserId === user.id) return` 제거 |
+| `flushSave` vs `flushPendingSave` | `StudioCanvas` | 통합 — 단일 `flushSave` (await + UI 상태 갱신) + `flushPendingSave` (fire-and-forget, unmount/visibility 용) |
+| `STATUS_DEBOUNCE_MS` | `StoryWorkspace` | 3000 → 1500 (50명 환경에서 진짜 끊김을 너무 늦게 인지하면 불리) |
+| `keepalive` 간격 | `useStoryRealtime` | 20s → 45s (50명 × 20s 빈도는 무의미한 broadcast 폭주) |
+| `system event` log | `useStoryRealtime` | 제거 (디버그 목적, 환경 가드 없이 항상 출력되던 noise) |
+
+**Phase 2 — Quick wins (데이터 손실 차단)**
+
+| ID | 항목 | 코드 위치 | 효과 |
+| --- | --- | --- | --- |
+| **A1** | Smart autosave | `StudioCanvas.tsx` `handleStoreChange` autosave 분기 | debounce 발화 시 `presencesRef.current.some(p => p.userId !== self && p.isDrawing)` 검사 → true 면 `AUTOSAVE_DEFER_RETRY_MS=1000` 후 재시도. `AUTOSAVE_MAX_DEFERS=5` 회 상한 (무한 연기 방지). owner snapshot 이 다른 사용자 in-flight 변경 누락한 상태로 덮어쓰는 케이스 차단 |
+| **A2** | Non-destructive reconnect | `StoryWorkspace.tsx` `handleReconnect` | `ed.loadSnapshot(parsed)` 전체 replace → 서버 snapshot 의 record 만 `store.put` 으로 merge. 로컬 unsynced 변경 보존. 보너스: 본인 로컬 shape record 들을 `broadcast({ updated: localShapes })` 로 catch-up 전송 (다른 사용자가 disconnect 동안의 본인 변경 회복). 트레이드오프: 다른 사용자가 정당하게 삭제한 record 가 잠시 부활 가능 — last-write-wins 로 자연 회복 |
+| **A3** | Broadcast throttle/batch | `useStoryRealtime.ts` `broadcast` | 50ms window 내 변경 누적 후 1번 송신. Record id 기반 dedupe (같은 shape 의 여러 updated 는 마지막 것만, added → updated 순서면 added 유지, removed 가 오면 add/update 무시). N명 환경에서 broadcast 수 폭증 + 수신측 re-render 폭증 완화 |
+
+**Phase 3 — 50명 폴리시**
+
+| ID | 항목 | 변경 |
+| --- | --- | --- |
+| **P1** | `CURSOR_THROTTLE_MS` | 33 (30Hz) → 66 (15Hz). 50명 × 30Hz = 1500 msg/s 부담 절반으로 |
+| **P2** | `LASER_THROTTLE_MS` | 16 (60Hz) → 33 (30Hz). 같은 이유 |
+| **Cap** | `MAX_STORY_PRESENCES` | 25명 cap. presence sync 시 본인 포함 정원 초과면 `channel.untrack()` + `setStatus('overflow')` + `OverflowNotice` 표시. **자동 재시도 없음** — `overflowRef` 로 scheduleRetry 차단. 사용자가 "다시 시도" 버튼 (= `window.location.reload`) 으로 새 채널 인스턴스 생성해서 재진입 |
+
+#### Overflow 동작 흐름
+
+1. 사용자 N번째 (>=26) 가 스토리 URL 접속.
+2. `useStoryRealtime` 가 channel subscribe + SUBSCRIBED 콜백에서 track.
+3. 첫 `presence sync` 이벤트에서 list.length > 25 + includesMe(self) 검사.
+4. 본인이 정원 초과 origin → 즉시 `channel.untrack()` + `overflowRef.current = true` + `setStatus('overflow')`.
+5. `StoryWorkspace` 가 status === 'overflow' 분기로 `OverflowNotice` 렌더 (캔버스 대신).
+6. 사용자가 "다시 시도" → `window.location.reload()` → 페이지 전체 재로드 → 다시 N+1 검사. 다른 사용자가 떠난 후면 정상 입장.
+
+**Race window**: 두 사용자가 동시에 26번째로 입장 시도하면 둘 다 잠시 "in" 으로 보이다가 둘 다 overflow 처리. 26~27 인원이 잠시 보일 수 있지만 곧 정상화. 무료 티어 정확성 트레이드오프로 수용.
+
+#### 50명 운영을 위한 후속 작업 (별도 결정 필요)
+
+D-017 적용 후 안정 운영 가능 범위는 **20~30명 정도**. 50명 운영을 위해서는:
+
+- **Yjs CRDT 마이그레이션** (B 옵션) — tldraw 의 `useYjsStore` + Y.Doc binary 영속화 (Supabase Storage). 1~2주 작업. CRDT 라서 데이터 손실 자체가 발생 안 함 → Smart autosave / Non-destructive reconnect 불필요.
+- 또는 **상업 매니지드 서비스** — Liveblocks / tldraw sync cloud 등 (상업화 시점에 검토).
+
+이행 시 D-017 의 quick wins (A1/A2/A3) 와 정원 cap 은 일부 제거 가능 (CRDT 가 본질적으로 대체).
 
 ---
 

@@ -7,6 +7,7 @@ import { SetupBanner } from '@/components/auth/SetupBanner';
 import { CreateChannelForm } from '@/components/channel/CreateChannelForm';
 import { ChannelList } from '@/components/channel/ChannelList';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { NotificationBell } from '@/components/notification/NotificationBell';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { listMyChannels } from '@/lib/usecases/list-my-channels';
 import { isSupabaseConfigured } from '@/lib/config/env';
@@ -48,6 +49,7 @@ export default async function LandingPage({ searchParams }: LandingPageProps) {
               마이페이지
             </Link>
           )}
+          <NotificationBell userId={user?.id ?? null} />
           <ThemeToggle />
         </div>
       </header>
@@ -89,7 +91,31 @@ export default async function LandingPage({ searchParams }: LandingPageProps) {
         </section>
       )}
 
-      {/* Phase 안내 footer 는 dev 흔적 — production 에서 사용자에게 노출 부적절 → 제거 */}
+      {/* 라이선스 attribution 푸터.
+          tldraw Hobby License 사용 중 (비상업적). 상업 전환 시 SDK License 필요.
+          README + DESIGN.md § 17.7 에 자세히 기술. */}
+      <footer className="mt-auto border-t border-divider pt-4 text-center text-[11px] text-fg-muted">
+        <p>
+          Built with{' '}
+          <a
+            href="https://tldraw.dev"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="underline-offset-2 hover:underline"
+          >
+            tldraw
+          </a>{' '}
+          (Hobby License) · Non-commercial use only ·{' '}
+          <a
+            href="https://github.com/jinhalim/onuri-studio"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="underline-offset-2 hover:underline"
+          >
+            GitHub
+          </a>
+        </p>
+      </footer>
     </main>
   );
 }

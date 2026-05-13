@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import type { Editor, TLRecord } from 'tldraw';
+import type { Editor, TLRecord } from '@/lib/editor';
 import { SignedInBanner } from '@/components/auth/SignedInBanner';
 import { StoryTitleInline } from '@/components/story/StoryTitleInline';
 import { LaserShareToggle, type LaserShareMode } from '@/components/story/LaserShareToggle';
@@ -19,6 +19,8 @@ import { loadStorySnapshotAction } from '@/app/actions/load-story-snapshot';
 import type { RemoteLaserStroke } from '@/components/canvas/RemoteLaserLayer';
 import { PresenceList } from '@/components/presence/PresenceList';
 import { OnAirIndicator } from '@/components/brand/OnAirIndicator';
+import { NotificationBell } from '@/components/notification/NotificationBell';
+import { OverflowNotice } from '@/components/story/OverflowNotice';
 import {
   useStoryRealtime,
   type CursorPayload,
@@ -33,7 +35,9 @@ import { cn } from '@/lib/utils';
 
 const LASER_FADE_CLEANUP_MS = 3000; // 1.5초 페이드 + 여유분
 const LASER_ORPHAN_TIMEOUT_MS = 2000; // 'end' phase 가 안 오는 stuck stroke 청소 기준
-const STATUS_DEBOUNCE_MS = 3000; // 일시적 끊김은 사용자에게 보이지 않게
+// 일시 끊김 표시 지연. 너무 길면 50명 환경에서 진짜 끊김을 사용자가 늦게 인지 →
+// 단순한 transient 만 가리는 1.5초로 단축.
+const STATUS_DEBOUNCE_MS = 1500;
 
 // 스토리 화이트보드 작업 영역.
 // realtime 구독을 본 컴포넌트가 일괄 소유 → header + canvas 가 공유.
@@ -58,6 +62,9 @@ export function StoryWorkspace({
 }: StoryWorkspaceProps) {
   const editorRef = useRef<Editor | null>(null);
   const saveControlsRef = useRef<SaveControls | null>(null);
+  // broadcast 함수는 useStoryRealtime 에서 반환되는데 handleReconnect 가 그것의 인자로
+  // 들어가는 circular dependency 회피용 ref. 아래 useStoryRealtime 호출 후 채워진다.
+  const broadcastRef = useRef<((changes: Omit<SyncPayload, 'fromUserId'>) => void) | null>(null);
   const [isDrawingLocal, setIsDrawingLocal] = useState(false);
   const [laserShareMode, setLaserShareMode] = useState<LaserShareMode>('private');
   const [remoteLaserStrokes, setRemoteLaserStrokes] = useState<Map<string, RemoteLaserStroke>>(
@@ -104,10 +111,7 @@ export function StoryWorkspace({
   // 원격 변경을 editor.store 에 적용 (loop 방지: mergeRemoteChanges)
   const handleRemoteSync = useCallback((payload: SyncPayload) => {
     const ed = editorRef.current;
-    if (!ed) {
-      console.warn('[StoryWorkspace] handleRemoteSync: editor 미준비');
-      return;
-    }
+    if (!ed) return;
     ed.store.mergeRemoteChanges(() => {
       try {
         if (payload.added && payload.added.length > 0) {
@@ -119,7 +123,6 @@ export function StoryWorkspace({
         if (payload.removed && payload.removed.length > 0) {
           ed.store.remove(payload.removed as Parameters<typeof ed.store.remove>[0]);
         }
-        console.log('[StoryWorkspace] 원격 변경 적용 완료');
       } catch (err) {
         console.error('[StoryWorkspace] 원격 변경 적용 실패:', err);
       }
@@ -148,20 +151,44 @@ export function StoryWorkspace({
     });
   }, []);
 
-  // B6: 재연결 시 서버의 최신 snapshot 으로 editor store 를 다시 채움.
-  // CLOSED ↔ SUBSCRIBED 사이의 broadcast 들을 놓쳤을 수 있으므로 복원 필수.
-  // mergeRemoteChanges 안에서 적용 → handleStoreChange 가 'remote' source 로 무시.
+  // A2 — Non-destructive reconnect:
+  // 재연결 시 서버 snapshot 으로 store 를 'replace' 하면 disconnect 동안의 로컬 변경이
+  // 통째로 사라짐 → 사용자가 자주 보고한 "내가 그린 게 사라짐" 의 한 원인.
+  // 따라서 loadSnapshot 대신 서버 record 들을 store.put 으로 머지 (로컬 추가분 보존).
+  // 보너스: 본인의 로컬 record 들을 catch-up broadcast 로 재전송해서 다른 사용자가
+  // disconnect 동안의 변경을 받을 수 있게 한다.
   const handleReconnect = useCallback(async () => {
     const ed = editorRef.current;
     if (!ed) return;
     try {
       const result = await loadStorySnapshotAction(story.id);
       if (!result.ok || !result.snapshotJson) return;
-      const parsed = JSON.parse(result.snapshotJson) as Record<string, unknown>;
+      const parsed = JSON.parse(result.snapshotJson) as {
+        document?: { store?: Record<string, TLRecord> };
+        store?: Record<string, TLRecord>;
+      };
+      // editor.getSnapshot() 의 신 포맷 ({document:{store,...}}) + 옛 store.getStoreSnapshot()
+      // ({store,...}) 모두 호환.
+      const serverStore = parsed.document?.store ?? parsed.store;
+      if (!serverStore) return;
+      const serverRecords = Object.values(serverStore);
+      if (serverRecords.length === 0) return;
+
       ed.store.mergeRemoteChanges(() => {
-        ed.loadSnapshot(parsed as Parameters<typeof ed.loadSnapshot>[0]);
+        // 머지만 — 명시적 remove 안 함. 로컬에 unsynced 추가분이 있어도 보존.
+        // 트레이드오프: 다른 사용자가 disconnect 동안 정당하게 삭제한 record 가 로컬에
+        // 부활할 수 있음. 다음 user-source 변경 시 그 사용자가 다시 삭제하면 자연 회복.
+        ed.store.put(serverRecords);
       });
-      console.log('[StoryWorkspace] 재연결 후 snapshot 재로드 완료');
+
+      // 본인 로컬 변경 catch-up broadcast — 다른 사용자가 놓친 우리 변경 회복.
+      // shape 만 대상 (other record types 는 instance/page 등 sync 대상 아님).
+      const localShapes = ed.store
+        .allRecords()
+        .filter((r) => r.typeName === 'shape') as TLRecord[];
+      if (localShapes.length > 0) {
+        broadcastRef.current?.({ updated: localShapes });
+      }
     } catch (err) {
       console.error('[StoryWorkspace] 재연결 snapshot 재로드 실패:', err);
     }
@@ -254,6 +281,11 @@ export function StoryWorkspace({
     onReconnect: handleReconnect,
   });
 
+  // handleReconnect 의 catch-up broadcast 가 사용할 수 있게 ref 갱신.
+  useEffect(() => {
+    broadcastRef.current = broadcast;
+  }, [broadcast]);
+
   // remoteCursors 를 presence 와 머지해서 PresenceLayer 가 쓸 형태로 변환.
   // presence 는 닉네임/색상/그리는 중 등 메타, cursor 는 별도 broadcast 라 따로 관리.
   const presences = useMemo(() => {
@@ -283,6 +315,21 @@ export function StoryWorkspace({
     isDrawing: isDrawingLocal,
   });
 
+  // D-017: 정원 초과 시 캔버스 대신 안내 페이지 표시. 채널 진입 즉시 untrack 되고
+  // 사용자가 "다시 시도" 버튼으로 페이지 리로드해야 입장 재시도.
+  if (status === 'overflow') {
+    return (
+      <main className="flex h-dvh flex-col">
+        <ForceDarkTheme />
+        <OverflowNotice
+          channelId={channel.id}
+          channelName={channel.name}
+          storyTitle={story.title}
+        />
+      </main>
+    );
+  }
+
   // 다른 사용자가 그리는 중 (본인 제외)
   const someoneDrawing = presences.some(
     (p) => p.userId !== realtimeUser.id && p.isDrawing,
@@ -292,12 +339,15 @@ export function StoryWorkspace({
     <main className="flex h-dvh flex-col">
       {/* 스토리 페이지는 다크 고정 (사용자 명시 요청). 떠나면 이전 테마로 복원. */}
       <ForceDarkTheme />
-      {/* relative + z-20 으로 헤더 stacking context 를 캔버스 위로 끌어올림.
-          tldraw 가 자체 stacking 을 만들어서 헤더의 PresenceList tooltip 이
-          캔버스에 가리는 현상 방지. */}
+      {/* z-[1000] + isolation: isolate — tldraw 의 도형 z-index (300) 보다
+          충분히 높이고 새 stacking context 생성. 헤더 자식 (PresenceList tooltip 등)
+          이 캔버스 위로 항상 그려짐. */}
       <header
-        className="relative z-20 flex flex-wrap items-center justify-between gap-x-2 gap-y-3 border-b border-divider bg-brand-bezel px-4 py-3 sm:gap-x-3 sm:px-6"
-        style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+        className="relative z-[1000] flex flex-wrap items-center justify-between gap-x-2 gap-y-3 border-b border-divider bg-brand-bezel px-4 py-3 sm:gap-x-3 sm:px-6"
+        style={{
+          paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+          isolation: 'isolate',
+        }}
       >
         {/* Left: back + title */}
         <div className="flex flex-col gap-1">
@@ -337,6 +387,7 @@ export function StoryWorkspace({
             />
           )}
           <ShareButton url={shareUrl} label="스토리 URL 공유" />
+          <NotificationBell userId={user?.id ?? null} />
           {user && <SignedInBanner user={user} compact />}
         </div>
       </header>
@@ -370,13 +421,16 @@ export function StoryWorkspace({
 function RealtimeStatusBadge({
   status,
 }: {
-  status: 'connecting' | 'connected' | 'closed' | 'error';
+  status: 'connecting' | 'connected' | 'closed' | 'error' | 'overflow';
 }) {
+  // overflow 는 부모가 일찍 early return 하므로 본 컴포넌트엔 도달 안 함.
+  // 타입 안전성 위해 case 만 포함 (fallback 표시).
   const config = {
     connecting: { label: '연결 중', color: 'text-fg-muted', dot: 'bg-fg-muted/50 animate-pulse' },
     connected: { label: '실시간', color: 'text-live', dot: 'bg-live' },
     closed: { label: '연결 끊김', color: 'text-fg-muted', dot: 'bg-fg-muted/50' },
     error: { label: '연결 오류', color: 'text-rec', dot: 'bg-rec animate-pulse-rec' },
+    overflow: { label: '정원 초과', color: 'text-rec', dot: 'bg-rec' },
   }[status];
 
   return (
@@ -429,7 +483,10 @@ function SaveStatusBadge({
         color,
       )}
     >
-      <span>{label}</span>
+      {/* SSR 시각과 client hydration 시각의 Date.now() 차이로 "32초 전" vs
+          "43초 전" mismatch 가 발생 → suppressHydrationWarning 으로 React #425
+          억제 (client 값이 SSR 값을 덮어씀). 60s interval 로 이후 갱신됨. */}
+      <span suppressHydrationWarning>{label}</span>
     </button>
   );
 }

@@ -43,6 +43,9 @@
 | 2026-05-11 | D-012 | **라이트 모드 추가** | `html[data-theme]` CSS 변수 분기. system preference 감지 + localStorage + cookie. 헤더 sun/moon 토글. 스토리(화이트보드) 페이지는 다크 고정. accent 컬러 공유 |
 | 2026-05-12 | D-013 | **Google SSO 활성화** *(O-012/O-016 부분 해결)* | `google-provider.ts` 어댑터 + `/auth/callback`. 익명 트랙 병행 유지. 닉네임은 별도 입력. 익명 흔적은 Google 계정에 흡수 |
 | 2026-05-12 | D-014 | **사용자 유형별 권한 정책** | 익명: 닉네임 입력 강제(middleware) + 나가기 모달 (Google 연동 / 데이터 삭제) + 비-owner export 차단. Google 회원: admin 외 전체 기능, 나가기 시 세션만 종료 |
+| 2026-05-13 | D-015 | **수정 권한 요청/승인 + 알림 inbox** *(O-015 부분 해결)* | **스토리 단위 / 영구 / DB 보관**. 비-owner 가 우상단 "읽기 전용" 배지 클릭 → owner 에게 `edit_request` 알림. owner 가 허용 시 `story_permissions.editor` 부여 + 요청자에게 승인 알림 → 클릭 시 페이지 리로드되며 편집 가능. Realtime push 는 broadcast 채널 `user-notifications:{userId}` (익명 사용자 Supabase 세션 부재 우회). 익명/Google 모두 동일 UX ([§ 17.6](DESIGN.md#176-d-015-수정-권한-요청-및-알림-시스템-구현-메모)) |
+| 2026-05-13 | D-016 | **tldraw Hobby License attribution + Editor abstraction L1** | 비상업적 사용 명시 (README "📜 라이선스" + 랜딩 푸터 + [§ 17.7](DESIGN.md#177-tldraw-라이선스-가이드) 라이선스 가이드). `lib/editor/index.ts` 신설로 tldraw 사용 표면 (components / hooks / shape utils / types) 한곳에 re-export. 9개 소비처는 `@/lib/editor` 만 import. 미래 editor 교체 (Excalidraw 등) 시 본 파일에 동일 시그니처 adapter 만 만들면 swap 가능 ([§ 17.8](DESIGN.md#178-editor-교체-대비-abstraction-가이드)) |
+| 2026-05-13 | D-017 | **Realtime sync hardening + per-story 정원 25명 제한** | Sync 코드 누적 흔적 정리 + 데이터 손실 핵심 케이스 차단 + 50명 대비 성능 폴리시 + 정원 cap. **Cleanup**: console.log 정리, 이중 fromUserId 안전망 제거, `flushSave`/`flushPendingSave` 통합, status 디바운스 1.5초로 단축, keepalive 45초로 늘림. **Quick wins**: Smart autosave (다른 사용자 그릴 때 연기 — owner snapshot 덮어쓰기 손실 차단), Non-destructive reconnect (replace → merge + catch-up broadcast), Broadcast throttle 50ms batching + dedupe. **50명 폴리시**: cursor 30Hz→15Hz, laser 60Hz→30Hz. **정원**: `MAX_STORY_PRESENCES = 25` — 초과 시 untrack + `OverflowNotice` 표시 (다시 시도 버튼만). 자동 재시도 없음. 50명 운영 시 Yjs CRDT 마이그레이션 필요 ([§ 17.9](DESIGN.md#179-d-017-realtime-sync-hardening-구현-메모)) |
 
 ### ⏳ 미해결 (사용자 검토 대기)
 
@@ -53,7 +56,7 @@
 | ~~O-012~~ | ~~SSO 우선순위~~ | **✅ D-013 부분 해결 (Google 채택)** | GitHub/Microsoft/Apple 등은 별도 결정 |
 | O-013 | **Google Workspace 통합 깊이** | Phase 8 시작 전 | |
 | O-014 | **이메일 발신자 표기** | Phase 9 도메인 인증 시 | |
-| O-015 | **채널 권한 시스템** (수정 권한 요청·알림·대표 이미지) | MVP 후 또는 인증 결정 후 | C 그룹 검토 후 보류 — D-EMAIL 뒤집기 필요. Could 항목 |
+| ~~O-015~~ | ~~채널 권한 시스템~~ | **✅ D-015 부분 해결 (스토리 단위 수정 권한)** | 채널 단위 권한 / 대표 이미지 등은 별도 |
 | ~~O-016~~ | ~~인증 방식 — 이메일 대신 다른 방식~~ | **✅ D-013 부분 해결 (Google SSO)** | 이메일 매직링크는 D-EMAIL 로 Phase 9 까지 보류 |
 
 ---
@@ -354,4 +357,13 @@ Supabase 미설정 상태에서도 dev 서버는 부팅되며, 랜딩 페이지�
 
 ## 📜 라이선스
 
-MIT — see [`LICENSE`](LICENSE).
+본 저장소 코드: MIT — see [`LICENSE`](LICENSE).
+
+### Third-party Licenses
+
+| 라이브러리 | 라이선스 | 비고 |
+| --- | --- | --- |
+| [tldraw](https://tldraw.dev) | **Hobby License** (비상업적 사용만 허용) | 현재 본 프로젝트는 비상업적 학습/포트폴리오 용도. 3.x 는 워터마크 포함. 상업 사용 시 [tldraw SDK License](https://tldraw.dev/community/license) 별도 구매 필요 ([§ 17.7](DESIGN.md#177-tldraw-라이선스-가이드)) |
+| Next.js, React, Supabase, lucide-react 등 | MIT / Apache 2.0 | 상업 자유 |
+
+> ⚠ **상업 전환 (수익화 / 회사 운영 / 광고 등) 시점에 tldraw SDK License 구매 필요.** 자가 진단 기준은 [`DESIGN.md` § 17.7](DESIGN.md#177-tldraw-라이선스-가이드) 참고.

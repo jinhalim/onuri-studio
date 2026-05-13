@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import type { User } from '@/lib/domain/user';
 import { LeaveConfirmDialog } from './LeaveConfirmDialog';
 import { cn } from '@/lib/utils';
@@ -27,7 +28,15 @@ export function SignedInBanner({ user, compact = false }: SignedInBannerProps) {
             className="h-3 w-3 rounded-full ring-1 ring-divider"
             style={{ backgroundColor: user.color }}
           />
-          <span className="text-fg">{user.nickname}</span>
+          {/* 닉네임 클릭 → /me 이동. PresenceList 의 접속자 닉네임 hover 와 구분되도록
+              underline-offset 으로 hover 표시. */}
+          <Link
+            href="/me"
+            title="마이페이지로 이동"
+            className="text-fg underline-offset-4 hover:underline"
+          >
+            {user.nickname}
+          </Link>
           <button
             type="button"
             onClick={() => setDialogOpen(true)}

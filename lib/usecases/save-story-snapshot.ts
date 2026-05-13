@@ -1,11 +1,12 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/infra/supabase/admin';
+import { hasStoryEditPermission } from './has-story-edit-permission';
 
 export interface SaveStorySnapshotInput {
   storyId: string;
   /** tldraw editor.getSnapshot() 결과를 JSON.stringify 한 문자열. */
   snapshotJson: string;
-  /** 권한 검증용. 채널 소유자만 저장 가능. */
+  /** 권한 검증용. 채널 owner 또는 D-015 editor 권한자만 저장 가능. */
   userId: string;
 }
 
@@ -37,8 +38,15 @@ export async function saveStorySnapshot(
   }
   if (!story) throw new Error('SNAPSHOT_STORY_NOT_FOUND');
   const ownerId = (story.channels as unknown as { owner_id: string }).owner_id;
+  // D-015: owner 가 아니더라도 story_permissions.editor 면 저장 가능.
   if (ownerId !== input.userId) {
-    throw new Error('SNAPSHOT_FORBIDDEN: 채널 소유자만 저장 가능');
+    const allowed = await hasStoryEditPermission({
+      storyId: input.storyId,
+      userId: input.userId,
+    });
+    if (!allowed) {
+      throw new Error('SNAPSHOT_FORBIDDEN: 채널 소유자 또는 편집 권한자만 저장 가능');
+    }
   }
 
   // JSON 문자열을 text 컬럼에 그대로 저장. (이전: bytea + Uint8Array 보내면

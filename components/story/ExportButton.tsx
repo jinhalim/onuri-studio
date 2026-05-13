@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Download, FileImage, FileCode, FileJson } from 'lucide-react';
-import type { Editor } from 'tldraw';
+import type { Editor } from '@/lib/editor';
 import {
   exportAsOnuriJson,
   exportAsPng,
