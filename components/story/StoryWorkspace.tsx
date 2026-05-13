@@ -292,8 +292,11 @@ export function StoryWorkspace({
     <main className="flex h-dvh flex-col">
       {/* 스토리 페이지는 다크 고정 (사용자 명시 요청). 떠나면 이전 테마로 복원. */}
       <ForceDarkTheme />
+      {/* relative + z-20 으로 헤더 stacking context 를 캔버스 위로 끌어올림.
+          tldraw 가 자체 stacking 을 만들어서 헤더의 PresenceList tooltip 이
+          캔버스에 가리는 현상 방지. */}
       <header
-        className="flex flex-wrap items-center justify-between gap-x-2 gap-y-3 border-b border-divider bg-brand-bezel px-4 py-3 sm:gap-x-3 sm:px-6"
+        className="relative z-20 flex flex-wrap items-center justify-between gap-x-2 gap-y-3 border-b border-divider bg-brand-bezel px-4 py-3 sm:gap-x-3 sm:px-6"
         style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
       >
         {/* Left: back + title */}

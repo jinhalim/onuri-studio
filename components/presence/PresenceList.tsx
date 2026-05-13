@@ -34,7 +34,9 @@ export function PresenceList({
     return (
       <div
         className={cn(
-          'flex items-center gap-2 rounded-sm border border-divider bg-brand-bezel/80 px-3 py-1.5 backdrop-blur-sm',
+          // py-2 로 avatar (h-5) 가 헤더 boundary 안에 충분히 들어가게.
+          // relative + z-10 으로 tooltip 등 자식 absolute 요소가 보장된 stacking context 안에서 그려짐.
+          'relative z-10 flex items-center gap-2 rounded-sm border border-divider bg-brand-bezel/80 px-3 py-2',
           className,
         )}
       >
