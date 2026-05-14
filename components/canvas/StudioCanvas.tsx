@@ -14,6 +14,7 @@ import {
 import 'tldraw/tldraw.css';
 import { customShapeUtils } from './customShapeUtils';
 import { CustomStylePanel, getPendingCustomColor } from './CustomStylePanel';
+import { CustomToolbar } from './CustomToolbar';
 import { NoteAuthorLayer } from './NoteAuthorLayer';
 import { OnboardingOverlay } from '@/components/story/OnboardingOverlay';
 import { RequestEditButton } from '@/components/story/RequestEditButton';
@@ -34,6 +35,8 @@ const overlayUtils = [HiddenScribbleOverlayUtil];
 // 기본 panel + HTML color picker section. customShapeUtils 가 meta 를 읽어 렌더에 반영.
 const tldrawComponents: TLComponents = {
   StylePanel: CustomStylePanel,
+  // 사용자 요청: 화면 넓을 때 더 많은 도구를 inline 노출 (overflow 임계점 ↑).
+  Toolbar: CustomToolbar,
 };
 import { saveStorySnapshotAction } from '@/app/actions/save-story-snapshot';
 import type {

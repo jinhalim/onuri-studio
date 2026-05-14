@@ -20,6 +20,7 @@ import {
   type TLShape,
 } from '@/lib/editor';
 import { GDriveFileShapeUtil } from './gdriveShapeUtil';
+import { TableShapeUtil } from './tableShapeUtil';
 
 const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
@@ -193,4 +194,6 @@ export const customShapeUtils = [
   CustomFrameShapeUtil,
   // D-018: 새 shape 타입 — Drive 파일 카드.
   GDriveFileShapeUtil,
+  // D-019: 새 shape 타입 — 표 (편집 가능한 grid).
+  TableShapeUtil,
 ];

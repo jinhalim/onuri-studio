@@ -21,6 +21,9 @@
 export {
   Tldraw,
   DefaultStylePanel,
+  DefaultToolbar,
+  DefaultToolbarContent,
+  TldrawUiMenuItem,
   StylePanelArrowKindPicker,
   StylePanelArrowheadPicker,
   StylePanelColorPicker,
@@ -57,9 +60,12 @@ export {
   ScribbleOverlayUtil,
   ShapeUtil,
   BaseBoxShapeUtil,
+  StateNode,
   Rectangle2d,
   HTMLContainer,
   T,
+  createShapeId,
+  resizeBox,
 } from 'tldraw';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -69,8 +75,12 @@ export type {
   Editor,
   TLRecord,
   TLShape,
+  TLShapeId,
   TLComponents,
   TLUiStylePanelProps,
+  TLUiOverrides,
   TLBaseShape,
+  TLResizeInfo,
   RecordProps,
+  TLStateNodeConstructor,
 } from 'tldraw';
