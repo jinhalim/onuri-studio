@@ -948,6 +948,7 @@ provider.destroy() + 마지막 스냅샷 flush
 | 2026-05-13 | D-016 | **tldraw Hobby License attribution + Editor abstraction L1** | **라이선스 attribution**: README "📜 라이선스" 섹션 + [§ 17.7](#177-tldraw-라이선스-가이드) 라이선스 가이드 + 랜딩 페이지 푸터 ("Built with tldraw (Hobby License) · Non-commercial use only"). **L1 abstraction**: `lib/editor/index.ts` 신설로 tldraw 의 사용 표면 (components / hooks / shape utils / types) 을 한곳에 명시적 re-export. 9개 캔버스 관련 소비처는 `@/lib/editor` 만 import → tldraw 직접 import 는 `lib/editor/index.ts` + StudioCanvas CSS side-effect 두 곳만 남음. 미래 editor 교체 (Excalidraw / 자체 canvas 등) 검토 시 본 파일에 동일 시그니처 adapter 작성으로 swap 가능. 구현 메모 [§ 17.8](#178-editor-교체-대비-abstraction-가이드). | CLAUDE.md §13 ("예산 $0", "MIT 호환 라이선스 우선") 의 운영 가이드 구체화. 상업화 결정 시점에 SDK License 구매 OR alternative editor 로 swap. |
 | 2026-05-13 | D-017 | **Realtime sync hardening + per-story 정원 제한** | 누적된 sync 코드 정리 + 데이터 손실 quick wins + 50명 대비 throttle 조정 + 정원 cap. 구현 메모 [§ 17.9](#179-d-017-realtime-sync-hardening-구현-메모). | CLAUDE.md §8 (Realtime D-010) + §9 ("한 스토리당 20명") 갱신 — 25명 cap + 50명 운영 시 Yjs CRDT 이행. |
 | 2026-05-13 | D-018 | **Google Drive 연동 — Phase 8a + 8b 완료** (O-013 부분 해결) | Phase 8 단계적 진입. **8a**: URL paste → `gdrive-file` custom shape → split-screen iframe (너비 resize 가능). **8b**: `drive.file` scope + Picker SDK + 마이페이지 Workspace 설정 + 폴더 자동 생성 (`{workspace}/{채널 [id]}/{스토리 [id]}/`) + Shortcut + viewer share + onDelete cleanup. Client-side Drive API (session.provider_token). Export `fileId` 제거 + `imported` flag. 구현 메모 [§ 17.10](#1710-d-018-google-drive-연동-구현-메모). | CLAUDE.md §5 "Could" Google Workspace 연계 시작. §11 Phase 8 첫 결정. |
+| 2026-05-14 | D-019 | **표 도구 (TableShape) + Toolbar 70vw inline 확장** | 신규 custom shape `'table'` — props (`rows`/`cols`/`cells`/`colWidths`/`rowHeights`) 모두 직렬화 가능 → 기존 broadcast sync 가 자동 처리. 셀 더블클릭 → `<textarea>` 인라인 편집 (Enter/Tab/Esc), 셀 경계 드래그 → 열/행 너비·높이 조정, 표 선택 시 외곽 +/- 버튼 → 행/열 추가·삭제 (max 50×20), 코너 핸들 → 표 통째 비례 리사이즈. `CustomToolbar` 가 `DefaultToolbar` 의 OverflowingToolbar 임계점을 `maxItems=8/maxSizePx=470` → `20/1200` 으로 확장 → 와이드 스크린에서 거의 모든 도구 inline 노출 (좁은 화면은 자연 overflow). 표 버튼은 `TldrawUiMenuItem + custom SVG (TLUiIconJsx)`. 구현 메모 [§ 17.11](#1711-d-019-tableshape--toolbar-70vw-구현-메모). | CLAUDE.md §5 "Could" 의 템플릿 항목을 캔버스 내 표로 구현. Google Sheets 첨부 (D-018) 와 병행 — 빠른 메모 vs 본격 데이터 역할 분리. |
 
 ### 17.2 D-007 색상 충돌 회피 알고리즘 상세
 
@@ -1354,6 +1355,76 @@ D-017 적용 후 안정 운영 가능 범위는 **20~30명 정도**. 50명 운�
 - Token 암호화: `INTEGRATION_TOKEN_ENCRYPTION_KEY` 로 access/refresh token AES 암호화 (구현 시 `crypto.subtle` 또는 `node:crypto`).
 - 폴더 share 가 `anyone with link`: 보안 우려 있지만 익명 fallback + 결정 4(b) 자동 viewer 의 가장 단순한 구현. 더 좁은 권한 필요 시 specific email share 로 변경 가능 (Google email 알 수 있는 사용자만).
 
+### 17.11 D-019 TableShape + Toolbar 70vw 구현 메모
+
+#### Toolbar overflow 임계점 확장
+
+tldraw 의 `DefaultToolbar` 는 `OverflowingToolbar` 가 sizingParent (`.tlui-main-toolbar.offsetWidth`) 를 측정해서 `modulate(size, [minSizePx, maxSizePx], [minItems, maxItems], clamp=true)` 으로 inline 표시할 아이템 수를 결정한다. default 값은 `maxItems=8 / maxSizePx=470` 으로 좁아서 와이드 스크린에서도 8개만 보이고 나머지는 "자세히" 로 가렸음.
+
+`CustomToolbar` (`components/canvas/CustomToolbar.tsx`) 에서 `maxItems=20 / maxSizePx=1200` 으로 확장:
+- 1920px 화면 → 캔버스 영역이 충분히 넓어 modulate 결과 ≥ 20 (clamp) → 모든 도구 inline.
+- 모바일/태블릿 → 캔버스 영역이 1200px 미만이라 modulate 가 비례 축소 → 자연스럽게 overflow 발생.
+
+> **장점**: CSS 강제가 아니라 tldraw 의 자체 임계점 메커니즘을 그대로 활용 — 향후 도구 추가/제거 시에도 동작 일관.
+
+#### TableShape 데이터 구조
+
+```ts
+type TableShape = TLBaseShape<'table', {
+  w: number;          // 표 전체 가로 = sum(colWidths)
+  h: number;          // 표 전체 세로 = sum(rowHeights)
+  rows: number;
+  cols: number;
+  cells: string[];    // rows*cols 길이 평면 배열, cellIdx(r,c) = r*cols + c
+  colWidths: number[];   // 각 열 픽셀 너비
+  rowHeights: number[];  // 각 행 픽셀 높이
+}>;
+```
+
+설계 선택:
+- **셀 데이터를 평면 배열로 저장** — 2D 배열보다 직렬화 호환성 + add/remove 연산 단순.
+- **colWidths / rowHeights 픽셀 단위** — 비례 단위 (퍼센트) 도 가능하지만 코너 리사이즈 시 scale 계산이 명확해서 픽셀 선택.
+- **w/h ≈ sum(colWidths) / sum(rowHeights)** — 코너 리사이즈 (`onResize`) 와 셀 경계 드래그 양쪽에서 sync 유지.
+
+#### onResize override 이유
+
+`BaseBoxShapeUtil` 의 default 는 `resizeBox(shape, info)` 로 w/h 만 변경 — colWidths/rowHeights 는 그대로 남아 grid 와 outer rect 가 mismatch. `TableShapeUtil.onResize` 가 resizeBox 의 결과에서 scaleX/scaleY 추출 후 cell 사이즈 배열을 같이 곱해서 비례 scale.
+
+> **타입 우회**: `resizeBox` 의 generic 이 closed TLShape union 으로 strict 라 `'table'` 비호환 → `as unknown as` cast (gdrive-file 의 updateShapes cast 와 동일 패턴).
+
+#### 셀 인라인 편집
+
+- tldraw 의 `canEdit() = true` 활성 → 더블클릭이 `editor.setEditingShape(shape.id)` 트리거 가능.
+- 본 shape 은 셀별로 편집해야 하므로 `editingCellIdx` 를 local React state 로 보관 (broadcast 안 함 — 본인만 보이는 cursor 상태).
+- `<textarea>` 사용 이유: 자동 wrap + Enter/Tab/Esc 키 핸들링 용이. tldraw 가 Del/arrow/cmd+Z 가로채지 않게 `e.stopPropagation()`.
+- Tab → `commitEdit() + 다음 셀 startEditCell` 으로 Excel 스타일 흐름.
+
+#### 셀 경계 드래그 (열/행 리사이즈)
+
+각 셀 우측/하단에 6px 두께 transparent overlay div 배치 (zIndex=2). `onPointerDown` → `window.addEventListener('pointermove'/'pointerup')` 으로 글로벌 드래그 추적. 마지막 열/행은 표 전체 확장, 가운데 경계는 인접 두 열/행에 너비 재분배.
+
+> **MIN_COL_W / MIN_ROW_H** (40 / 24) 미만으로 줄지 않게 clamp — 셀이 사용 불가 너비로 줄어드는 것 방지.
+
+#### 행/열 추가·삭제
+
+표 선택 시 외곽에 absolute-positioned 원형 +/- 버튼 4개 노출 (`StructureButton`). 각각 마지막 열/행 기준으로 추가·삭제. MAX_ROWS=50 / MAX_COLS=20 으로 상한 제한 — broadcast / 렌더 비용 관리.
+
+`cells` 배열 재구성:
+- 열 추가/삭제는 매 행마다 항목 삽입·제거 (loop 필요).
+- 행 추가는 끝에 cols 개 빈 string push, 행 삭제는 끝에서 cols 개 pop.
+
+#### 동기화
+
+`cells / colWidths / rowHeights` 가 평범한 직렬화 가능 데이터 → `useStoryRealtime` 의 broadcast sync 가 자동 처리 (다른 도형과 동일). 두 사용자가 같은 셀 동시 편집 시 last-write-wins (D-010 정책).
+
+> **알려진 한계**: 다른 사용자가 셀 텍스트 수정 중 우리가 행/열 추가하면 cells 배열 길이가 바뀌어 일시적 mismatch 가능. broadcast 순서가 정상이면 결국 수렴. CRDT 가 아니라서 race 가능.
+
+#### Toolbar 버튼
+
+`TldrawUiMenuItem` 의 `icon` prop 이 `TLUiIconJsx = ReactElement<HTMLAttributes<HTMLDivElement>>` 를 받으니 div 로 감싼 custom SVG 직접 전달. 클릭 시 `editor.getViewportPageBounds()` 로 viewport 중앙 page coords 구해서 그 위치에 새 표 생성 + 선택.
+
+> tldraw built-in icon 에 grid/table 없어서 custom SVG 가 유일한 방법. 향후 brand SVG 통일 시 `assetUrls` override 로 register 도 가능.
+
 ---
 
 ## 18. 변경 이력
@@ -1367,3 +1438,4 @@ D-017 적용 후 안정 운영 가능 범위는 **20~30명 정도**. 50명 운�
 | 2026-05-11 | 0.5.0 | **D-011 임의 색상 + D-012 라이트 모드**. customColor meta override + StylePanel 교체. `data-theme` CSS 변수 분기 + system preference + 영속화. |
 | 2026-05-12 | 0.6.0 | **D-013 Google SSO + D-014 사용자 유형별 권한**. provider abstraction 의 google 활성화 + 익명 → Google 흡수. 익명 middleware 가드 + 나가기 모달 + 비-owner export 차단. |
 | 2026-05-13 | 0.7.0 | **D-015 ~ D-017 일괄 적용**. <br>**D-015**: 스토리 단위 수정 권한 요청/승인 + DB 알림 inbox (`story_permissions` / `notifications` 테이블 + broadcast push + UI 4종). <br>**D-016**: tldraw Hobby License attribution (README + DESIGN § 17.7 + 랜딩 푸터) + Editor abstraction L1 (`lib/editor/index.ts` re-export, 9개 소비처 일괄 전환, § 17.8 가이드). <br>**D-017**: Realtime sync hardening — cleanup (console.log / 이중 안전망 제거 / flushSave 통합 / status 디바운스 단축 / keepalive 45s) + Quick wins (Smart autosave / Non-destructive reconnect / 50ms broadcast batching) + 50명 폴리시 (cursor 15Hz / laser 30Hz) + **per-story 25명 정원 cap + OverflowNotice** (§ 17.9). |
+| 2026-05-14 | 0.8.0 | **D-018 Phase 8b 마무리 + D-019 표 도구**. <br>**D-018 보강**: Picker `setAppId(NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER)` 추가 (drive.file scope + Picker 404 해결), 양방향 rename (`renameDriveFile` / `getDriveFileName` + refresh 버튼), 아이콘 UX (더블클릭 인라인 편집 + 리사이즈 + 비례 스케일), 읽기 모드 사용자 `/preview` URL 강제, Frame `customColor` 의 안쪽 fill 50% 연한 tint, "Drive 폴더 열기" 옵션 (Picker 없이 폴더만 ensure), workspace 미설정 hybrid 안내 dialog. <br>**D-019**: 신규 `'table'` custom shape — 셀 인라인 편집 + 경계 드래그 리사이즈 + 행/열 추가·삭제 (max 50×20). CustomToolbar 가 `OverflowingToolbar` 임계점 (`maxItems=8 / maxSizePx=470`) 을 `20 / 1200` 으로 확장 → 와이드 스크린에서 거의 모든 도구 inline (§ 17.11). |
