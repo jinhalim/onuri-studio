@@ -54,6 +54,8 @@ interface StoryWorkspaceProps {
   canEdit: boolean;
   initialSnapshotJson: string | null;
   shareUrl: string;
+  /** D-018: Google 사용자만 non-null. anonymous 면 항상 null. */
+  gdriveWorkspace: import('@/lib/domain/gdrive').GDriveWorkspace | null;
 }
 
 export function StoryWorkspace({
@@ -63,6 +65,7 @@ export function StoryWorkspace({
   canEdit,
   initialSnapshotJson,
   shareUrl,
+  gdriveWorkspace,
 }: StoryWorkspaceProps) {
   const editorRef = useRef<Editor | null>(null);
   // D-018 PoC: gdrive panel 의 useValue 가 editor 변화를 reactive 하게 추적하려면
@@ -418,9 +421,19 @@ export function StoryWorkspace({
           <LaserShareToggle mode={laserShareMode} onChange={setLaserShareMode} />
           {/* D-014: 익명 + 비-owner 일 때는 export 불가 (남의 채널 콘텐츠 내보내기 차단).
               owner 거나 Google 회원이면 자유롭게 export 가능. */}
-          {/* D-018 PoC: 모든 접속자 (소유자 포함) 가 첨부 가능. 첨부된 카드는 broadcast 로
-              다른 사용자에게도 자동 전파. Phase 8b 부터는 권한 정책 검토 필요. */}
-          <GDriveAttachButton editorRef={editorRef} disabled={!canEdit} />
+          {/* D-018 Phase 8b: Drive 첨부 — Google 연동 사용자 + canEdit 한정.
+              Picker (메인) + URL paste (보조). workspace 미설정 시 Hybrid 안내. */}
+          {user && !user.isAnonymous && (
+            <GDriveAttachButton
+              editorRef={editorRef}
+              disabled={!canEdit}
+              workspace={gdriveWorkspace}
+              channelId={channel.id}
+              channelName={channel.name}
+              storyId={story.id}
+              storyTitle={story.title}
+            />
+          )}
           {(canEdit || (user && !user.isAnonymous)) && (
             <ExportButton
               editorRef={editorRef}

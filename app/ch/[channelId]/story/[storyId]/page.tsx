@@ -5,6 +5,7 @@ import { getChannelWithStories } from '@/lib/usecases/get-channel-with-stories';
 import { loadStorySnapshot } from '@/lib/usecases/load-story-snapshot';
 import { recordParticipation } from '@/lib/usecases/record-participation';
 import { hasStoryEditPermission } from '@/lib/usecases/has-story-edit-permission';
+import { getGdriveWorkspace } from '@/lib/usecases/get-gdrive-workspace';
 import { urls } from '@/lib/config/urls';
 
 interface StoryPageProps {
@@ -33,6 +34,10 @@ export default async function StoryPage({ params }: StoryPageProps) {
     !isOwner && user ? await hasStoryEditPermission({ storyId: story.id, userId: user.id }) : false;
   const canEdit = isOwner || hasEditorPermission;
 
+  // D-018: Drive Workspace — Google 사용자만. GDriveAttachButton 으로 전달.
+  const gdriveWorkspace =
+    user && !user.isAnonymous ? await getGdriveWorkspace(user.id) : null;
+
   // 참여 기록은 페이지 렌더와 무관 (UI 에 안 보임) → fire-and-forget 으로 진입 차단 X.
   // 에러는 콘솔에만 남기고 페이지는 정상 렌더.
   if (user) {
@@ -53,6 +58,7 @@ export default async function StoryPage({ params }: StoryPageProps) {
       canEdit={canEdit}
       initialSnapshotJson={initialSnapshotJson}
       shareUrl={shareUrl}
+      gdriveWorkspace={gdriveWorkspace}
     />
   );
 }
