@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   DefaultToolbar,
   DefaultToolbarContent,
@@ -14,10 +15,12 @@ import { propsForGrid } from './tableShapeUtil';
 // 화면이 넓어도 8개만 inline 표시 + 나머지는 "자세히" overflow. 본 wrapper 는 그 임계점을
 // 늘려서 ~70vw 의 가로 공간을 채울 때까지 inline 노출.
 //
-// D-019 + D-020: 표 도구 — Excel 스타일 grid picker. 버튼 hover 시 popover 열림,
-// 셀 hover 로 행/열 미리보기, 셀 클릭 시 그 크기의 표 생성.
+// D-019: 표 도구 — Excel 스타일 grid picker.
+//   ⚠ tldraw 의 OverflowingToolbar 가 boundary 도구를 main + overflow 양쪽에 렌더 (quirk).
+//   그래서 picker 도 부모 영역에 종속되면 좁은 overflow popover 안에서 잘림. 이를 피하려고
+//   createPortal 로 document.body 직속 렌더 + 버튼 좌표 기반 position: fixed.
+//   양쪽 버튼이 hover 돼도 결과 위치/내용 동일 → 사용자가 어디서 hover 하든 같은 UX.
 
-// 표 아이콘 — tldraw built-in icon 에 grid/table 없어서 custom SVG.
 const TableIconJsx = (
   <div
     style={{
@@ -47,23 +50,33 @@ const TableIconJsx = (
   </div>
 );
 
-// Grid picker 의 차원 (사용자가 한 번에 선택 가능한 최대 표).
 const PICKER_MAX_COLS = 10;
 const PICKER_MAX_ROWS = 8;
-const CELL_SIZE = 20; // px
+const CELL_SIZE = 20;
 const CELL_GAP = 2;
+const PICKER_PADDING = 10;
 
 function TableToolbarButton() {
   const editor = useEditor();
   const [isOpen, setIsOpen] = useState(false);
   const [hover, setHover] = useState<{ rows: number; cols: number } | null>(null);
-  // hover 가 button → picker 사이 이동 시 깜빡임 방지 (close 약간 지연).
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const buttonRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<number | null>(null);
+
+  // createPortal 는 SSR 안 됨 → client mount 이후에만 활성화.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const openPicker = () => {
     if (closeTimerRef.current !== null) {
       window.clearTimeout(closeTimerRef.current);
       closeTimerRef.current = null;
+    }
+    if (buttonRef.current) {
+      setAnchorRect(buttonRef.current.getBoundingClientRect());
     }
     setIsOpen(true);
   };
@@ -100,9 +113,8 @@ function TableToolbarButton() {
   };
 
   return (
-    // 외곽 div — TldrawUiMenuItem 이 안에 들어있고, hover 로 picker 띄움.
-    // OverflowingToolbar 는 이 div 를 1개 item 으로 인식.
     <div
+      ref={buttonRef}
       onMouseEnter={openPicker}
       onMouseLeave={scheduleClose}
       style={{ position: 'relative', display: 'inline-flex' }}
@@ -116,59 +128,81 @@ function TableToolbarButton() {
           createTable(3, 3);
         }}
       />
-      {isOpen && (
-        <TableGridPicker
-          hover={hover}
-          onHoverCell={(r, c) => setHover({ rows: r, cols: c })}
-          onClearHover={() => setHover(null)}
-          onPick={(r, c) => createTable(r, c)}
-        />
-      )}
+      {isOpen &&
+        mounted &&
+        anchorRect &&
+        createPortal(
+          <TableGridPicker
+            anchor={anchorRect}
+            hover={hover}
+            onHoverCell={(r, c) => setHover({ rows: r, cols: c })}
+            onClearHover={() => setHover(null)}
+            onPick={(r, c) => createTable(r, c)}
+            onMouseEnter={openPicker}
+            onMouseLeave={scheduleClose}
+          />,
+          document.body,
+        )}
     </div>
   );
 }
 
 interface TableGridPickerProps {
+  anchor: DOMRect;
   hover: { rows: number; cols: number } | null;
   onHoverCell: (rows: number, cols: number) => void;
   onClearHover: () => void;
   onPick: (rows: number, cols: number) => void;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
 }
 
 function TableGridPicker({
+  anchor,
   hover,
   onHoverCell,
   onClearHover,
   onPick,
+  onMouseEnter,
+  onMouseLeave,
 }: TableGridPickerProps) {
   const label = hover
     ? `${hover.rows} × ${hover.cols} 표`
     : '크기 선택 (행 × 열)';
-
-  // popover 너비/높이 — 셀 + gap + padding.
   const gridW = PICKER_MAX_COLS * CELL_SIZE + (PICKER_MAX_COLS - 1) * CELL_GAP;
   const gridH = PICKER_MAX_ROWS * CELL_SIZE + (PICKER_MAX_ROWS - 1) * CELL_GAP;
+  // popover 자체 너비 (padding + grid).
+  const popW = gridW + PICKER_PADDING * 2;
+
+  // 버튼 위쪽으로 popover 띄움 (toolbar 가 화면 하단 기준). 6px 갭.
+  // viewport 좌우 경계 안 넘게 clamp.
+  const bottom = window.innerHeight - anchor.top + 6;
+  let left = anchor.left + anchor.width / 2 - popW / 2;
+  left = Math.max(8, Math.min(window.innerWidth - popW - 8, left));
 
   return (
     <div
       role="dialog"
       aria-label="표 크기 선택"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={() => {
+        onClearHover();
+        onMouseLeave();
+      }}
       style={{
-        position: 'absolute',
-        // 메인 toolbar 가 화면 하단에 있다고 가정 → 버튼 위쪽으로 popover.
-        bottom: 'calc(100% + 6px)',
-        left: '50%',
-        transform: 'translateX(-50%)',
+        position: 'fixed',
+        bottom,
+        left,
+        width: popW,
         background: 'var(--color-panel, #fff)',
         color: 'var(--color-text-1, #1f1f2a)',
         border: '1px solid var(--color-divider, #DCDCE0)',
         borderRadius: 8,
-        padding: 10,
+        padding: PICKER_PADDING,
         boxShadow: '0 6px 18px rgba(0,0,0,0.18)',
-        zIndex: 100,
+        zIndex: 10_000,
         userSelect: 'none',
       }}
-      onMouseLeave={onClearHover}
     >
       <div
         style={{

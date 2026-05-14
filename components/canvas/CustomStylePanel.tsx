@@ -87,6 +87,23 @@ export const CustomStylePanel = memo(function CustomStylePanel(props: TLUiStyleP
   const [collapsed, setCollapsed] = useState(false);
   const [dragging, setDragging] = useState(false);
 
+  // 모바일/태블릿 환경 (768px 미만) 에서는 드래그 비활성화 — 패널이 안 보이는 영역으로
+  // 옮겨질 수 있어서. 좁은 화면에선 tldraw 가 panel 을 화면 끝에 안전하게 배치하므로
+  // 드래그 자체가 필요 없음. 크기 변경 시 offset 도 (0,0) 으로 reset.
+  const [isNarrow, setIsNarrow] = useState(false);
+  useEffect(() => {
+    const check = () => setIsNarrow(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  useEffect(() => {
+    if (isNarrow) {
+      setOffset({ x: 0, y: 0 });
+      setDragging(false);
+    }
+  }, [isNarrow]);
+
   // 드래그 시작 시점의 pointer/offset snapshot. 리렌더로 인한 closure stale 방지 위해 ref.
   const dragStartRef = useRef<{
     pointerX: number;
@@ -100,19 +117,23 @@ export const CustomStylePanel = memo(function CustomStylePanel(props: TLUiStyleP
     offsetRef.current = offset;
   }, [offset]);
 
-  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    // 접기 버튼 같은 [data-no-drag] 요소 클릭은 드래그로 인식하지 않음.
-    if ((e.target as HTMLElement).closest('[data-no-drag]')) return;
-    e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    dragStartRef.current = {
-      pointerX: e.clientX,
-      pointerY: e.clientY,
-      offsetX: offsetRef.current.x,
-      offsetY: offsetRef.current.y,
-    };
-    setDragging(true);
-  }, []);
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // 좁은 화면에선 드래그 비활성. 접기 버튼 같은 [data-no-drag] 요소도 제외.
+      if (isNarrow) return;
+      if ((e.target as HTMLElement).closest('[data-no-drag]')) return;
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      dragStartRef.current = {
+        pointerX: e.clientX,
+        pointerY: e.clientY,
+        offsetX: offsetRef.current.x,
+        offsetY: offsetRef.current.y,
+      };
+      setDragging(true);
+    },
+    [isNarrow],
+  );
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const s = dragStartRef.current;
@@ -143,7 +164,8 @@ export const CustomStylePanel = memo(function CustomStylePanel(props: TLUiStyleP
     >
       <DefaultStylePanel {...props}>
         {/* 드래그 + 접기/펴기 헤더 바. DefaultStylePanel 안쪽에 두어 panel chrome
-            (배경/테두리/그림자) 안에 통합돼 보이게 함. */}
+            (배경/테두리/그림자) 안에 통합돼 보이게 함.
+            좁은 화면에선 드래그 비활성 — grip 아이콘 + grab 커서 숨김 (접기 버튼만 유효). */}
         <div
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -154,8 +176,8 @@ export const CustomStylePanel = memo(function CustomStylePanel(props: TLUiStyleP
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '4px 4px 4px 8px',
-            cursor: dragging ? 'grabbing' : 'grab',
-            touchAction: 'none', // 모바일 드래그 활성
+            cursor: isNarrow ? 'default' : dragging ? 'grabbing' : 'grab',
+            touchAction: isNarrow ? 'auto' : 'none',
             userSelect: 'none',
             fontSize: 11,
             color: 'var(--color-text-2)',
@@ -172,7 +194,7 @@ export const CustomStylePanel = memo(function CustomStylePanel(props: TLUiStyleP
               letterSpacing: 0,
             }}
           >
-            <span style={{ fontSize: 14, lineHeight: 1 }}>⠿</span>
+            {!isNarrow && <span style={{ fontSize: 14, lineHeight: 1 }}>⠿</span>}
             <span>스타일</span>
           </span>
           <button

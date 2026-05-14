@@ -131,7 +131,10 @@ export class TableShapeUtil extends BaseBoxShapeUtil<TableShape> {
   }
 
   override canEdit() {
-    return false; // 셀 단위 편집은 본 컴포넌트가 직접 setEditingShape 호출.
+    // true 여야 editor.setEditingShape(shape.id) 가 허용된다 — false 면 tldraw 가
+    // canEditShape 체크에서 silent reject (Editor.mjs:1956). 셀 클릭 카운팅은 우리가
+    // onPointerDown 으로 직접 처리해서 native dblclick 미발생 이슈와 무관.
+    return true;
   }
   override canResize() {
     return true;

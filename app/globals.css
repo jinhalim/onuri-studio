@@ -116,3 +116,31 @@ html[data-theme='light'] {
   margin: 0 !important;
 }
 
+/* ----------------------------------------------------------------
+   모바일/태블릿 (좁은 화면) — Toolbar / StylePanel 오버플로 스크롤 처리.
+   StylePanel 은 섹션이 많아 좁은 viewport 에서 세로 짤림 → 세로 스크롤 허용.
+   Toolbar 의 overflow 팝오버 (자세히) 도 화면 높이 넘으면 스크롤.
+   임계점: 768px — tldraw 자체 mobile 레이아웃 + 사용자 요청 일치.
+   ---------------------------------------------------------------- */
+@media (max-width: 767px) {
+  .tlui-style-panel {
+    max-height: calc(100vh - 140px); /* 상단 헤더 + 하단 toolbar 여유 */
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+  /* "자세히" 팝오버 — 도구가 많아도 세로 스크롤. */
+  .tlui-main-toolbar__overflow-content {
+    max-height: calc(100vh - 180px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  /* 메인 가로 Toolbar 자체도 너무 좁으면 가로 스크롤 (자세히 외 항목 보이게).
+     OverflowingToolbar 가 hide 한 항목들은 자세히 안으로 들어가니까 가로 스크롤은
+     사실상 안 보이는 게 정상 — 만약 발생하면 자연스럽게 처리. */
+  .tlui-main-toolbar__tools {
+    max-width: calc(100vw - 16px);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+}
+

@@ -69,6 +69,32 @@ const LOCAL_LASER_COLOR = '#FF3D5A';
 const LASER_FADE_CLEANUP_MS = 3000;
 const LASER_ORPHAN_TIMEOUT_MS = 2000;
 
+// D-019: snapshot pre-migration — table shape 의 cellMerges 필드는 D-019 에서 추가됨.
+// 그 이전에 저장된 snapshot 의 table shape 은 cellMerges 가 undefined → 새 validator
+// (T.arrayOf required) 가 reject → loadSnapshot 이 store 손상시킴 → instance state 까지
+// 사라져 후속 render 에서 TypeError.
+// 본 함수가 parsed JSON 을 in-place 로 수정해서 누락된 cellMerges 를 [] 로 채움.
+function migrateTableShapesInSnapshot(parsed: unknown): void {
+  if (!parsed || typeof parsed !== 'object') return;
+  const root = parsed as Record<string, unknown>;
+  // 두 가지 snapshot 포맷 지원:
+  //   - TLEditorSnapshot: { document: { store: {...} }, session: ... }
+  //   - TLStoreSnapshot:  { store: {...}, schema: ... }
+  const document = root.document as { store?: Record<string, unknown> } | undefined;
+  const store =
+    (document?.store as Record<string, unknown> | undefined) ??
+    (root.store as Record<string, unknown> | undefined);
+  if (!store) return;
+  for (const id of Object.keys(store)) {
+    const rec = store[id] as { type?: string; props?: Record<string, unknown> } | undefined;
+    if (!rec || rec.type !== 'table') continue;
+    if (!rec.props) continue;
+    if (!Array.isArray(rec.props.cellMerges)) {
+      rec.props.cellMerges = [];
+    }
+  }
+}
+
 // 캔버스 본체. realtime 구독은 StoryWorkspace 가 관리하고
 // 본 컴포넌트는 broadcast/updatePresence 콜백을 받아 사용한다.
 //
@@ -352,14 +378,33 @@ export function StudioCanvas({
       setEditor(ed);
       onEditorMount(ed);
 
+      // tldraw 5.0.0 의 Editor.dispose 는 line 813 에서 `getInstanceState().followingUserId`
+      // 를 defensive check 없이 읽는다. instance state 가 일찍 사라진 상태 (Next.js dev HMR
+      // 재마운트 race / 두 번째 dispose 호출 등) 에서 TypeError 발생.
+      // 우리 unmount 흐름에선 무해 (이미 cleanup 끝난 시점) — 콘솔 warning 으로만 남기고
+      // overlay error 차단. tldraw 자체 패치 전까지의 workaround.
+      const originalDispose = ed.dispose.bind(ed);
+      ed.dispose = () => {
+        try {
+          originalDispose();
+        } catch (err) {
+          console.warn('[StudioCanvas] editor.dispose error suppressed:', err);
+        }
+      };
+
       if (initialSnapshotJson) {
         try {
           const parsed = JSON.parse(initialSnapshotJson) as Record<string, unknown>;
+          // D-019: 스키마 호환성 보정 — 예전에 저장된 table shape 은 cellMerges 가 없어서
+          // 새 validator 가 reject → store 가 깨지고 instance state 까지 사라져 후속
+          // getCurrentPageId() / scribbles 접근에서 TypeError. 사전 migration 으로 누락된
+          // cellMerges 를 [] 로 채워 schema 검증 통과시킴.
+          migrateTableShapesInSnapshot(parsed);
           // editor.loadSnapshot 은 TLEditorSnapshot({document,session}) 와
           // TLStoreSnapshot({store,schema}) 둘 다 받는다 (구포맷/신포맷 호환).
           ed.loadSnapshot(parsed as Parameters<typeof ed.loadSnapshot>[0]);
         } catch (err) {
-          console.warn('[StudioCanvas] 초기 snapshot 파싱 실패, 빈 캔버스로 시작:', err);
+          console.warn('[StudioCanvas] 초기 snapshot 로드 실패, 빈 캔버스로 시작:', err);
         }
       }
 
