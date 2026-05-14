@@ -15,31 +15,15 @@ import {
   GeoShapeUtil,
   HighlightShapeUtil,
   LineShapeUtil,
-  NoteShapeUtil,
   TextShapeUtil,
-  type TLShape,
 } from '@/lib/editor';
 import { GDriveFileShapeUtil } from './gdriveShapeUtil';
 import { TableShapeUtil } from './tableShapeUtil';
+import { CustomNoteShapeUtilWithAuthor } from './customNoteShapeUtil';
+export { getCustomColor } from './customShapeUtils-shared';
+import { getCustomColor } from './customShapeUtils-shared';
 
-const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
-
-/** shape.meta.customColor 가 유효한 hex 문자열이면 반환, 아니면 null. */
-export function getCustomColor(shape: TLShape): string | null {
-  const v = (shape.meta as Record<string, unknown> | undefined)?.customColor;
-  return typeof v === 'string' && HEX_RE.test(v) ? v : null;
-}
-
-// 노트 셀상관(WCAG) 단순화: 휘도 기준 검정/흰색 라벨.
-function labelOnHex(hex: string): string {
-  const m = hex.replace('#', '');
-  const r = parseInt(m.length === 3 ? m[0]! + m[0]! : m.slice(0, 2), 16);
-  const g = parseInt(m.length === 3 ? m[1]! + m[1]! : m.slice(2, 4), 16);
-  const b = parseInt(m.length === 3 ? m[2]! + m[2]! : m.slice(4, 6), 16);
-  // sRGB 휘도 근사
-  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return lum > 0.6 ? '#1F1F2A' : '#F5F5F7';
-}
+// labelOnHex 는 customNoteShapeUtil.tsx 로 이동 — 본 파일에서는 미사용.
 
 // fill='solid' 등에서 쓰는 반투명 fill 변형 (hex + 알파).
 function hexWithAlpha(hex: string, alpha01: number): string {
@@ -109,19 +93,8 @@ const CustomGeoShapeUtil = GeoShapeUtil.configure({
   },
 });
 
-const CustomNoteShapeUtil = NoteShapeUtil.configure({
-  getCustomDisplayValues: (_editor, shape) => {
-    const hex = getCustomColor(shape);
-    if (!hex) return {};
-    return {
-      noteBackgroundColor: hex,
-      // border 는 약간 어둡게/투명하게
-      borderColor: hexWithAlpha(hex, 0.6),
-      // 라벨 색은 배경 휘도에 따라 자동 결정 (가독성)
-      labelColor: labelOnHex(hex),
-    };
-  },
-});
+// CustomNoteShapeUtil 은 별도 .tsx 파일로 분리 (component() override 에 JSX 필요).
+// .configure({ getCustomDisplayValues }) + component() 인라인 author 라벨 둘 다 처리.
 
 const CustomArrowShapeUtil = ArrowShapeUtil.configure({
   getCustomDisplayValues: (_editor, shape) => {
@@ -186,7 +159,7 @@ const CustomFrameShapeUtil = FrameShapeUtil.configure({
 export const customShapeUtils = [
   CustomDrawShapeUtil,
   CustomGeoShapeUtil,
-  CustomNoteShapeUtil,
+  CustomNoteShapeUtilWithAuthor,
   CustomArrowShapeUtil,
   CustomLineShapeUtil,
   CustomTextShapeUtil,

@@ -9,9 +9,12 @@
 //
 // UX:
 //   - 단일 클릭 = 표 선택 (다른 도형처럼 이동/리사이즈)
-//   - 셀 더블클릭 = 인라인 텍스트 편집 (Enter 저장 / Esc 취소)
+//   - 셀 더블클릭 = 인라인 텍스트 편집 (Enter 저장 / Esc 취소 / Tab 다음 셀)
+//     ⚠ tldraw 의 pointer system 이 preventDefault 로 native dblclick 을 막아서
+//     onPointerDown 으로 클릭 카운팅 직접 처리 (lastClickRef + 400ms 임계).
+//   - 셀 우클릭 = 컨텍스트 메뉴 (행/열 추가·삭제) — D-020.
 //   - 열/행 경계 호버 = ↔/↕ 커서 → 드래그로 너비/높이 조정
-//   - 표 선택 시 외곽에 +/- 버튼 노출 → 행/열 추가·삭제
+//   - customColor (StylePanel) = 외곽 + 셀 구분선 색 반영
 //
 // 동기화: cells / colWidths / rowHeights 는 평범한 직렬화 가능 데이터 → useStoryRealtime
 // 의 broadcast sync 가 자동 처리 (다른 shape 과 동일).
@@ -26,7 +29,9 @@ import {
   useValue,
   type RecordProps,
   type TLBaseShape,
+  type TLShape,
 } from '@/lib/editor';
+import { getCustomColor } from './customShapeUtils-shared';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Shape definition
@@ -54,15 +59,26 @@ const MIN_ROW_H = 24;
 const MAX_ROWS = 50;
 const MAX_COLS = 20;
 
+// 표 기본 테두리 색 (다크 모드 stroke). customColor 있으면 그 색으로 override.
+const DEFAULT_BORDER_COLOR = '#2A2A38';
+const DEFAULT_CELL_LINE_COLOR = '#DCDCE0';
+
 function defaultProps(): TableShape['props'] {
-  const cells = Array.from({ length: DEFAULT_ROWS * DEFAULT_COLS }, () => '');
-  const colWidths = Array.from({ length: DEFAULT_COLS }, () => DEFAULT_COL_W);
-  const rowHeights = Array.from({ length: DEFAULT_ROWS }, () => DEFAULT_ROW_H);
+  return propsForGrid(DEFAULT_ROWS, DEFAULT_COLS);
+}
+
+/** rows×cols 의 빈 표 props 만들기 — Toolbar 의 grid picker 도 호출. */
+export function propsForGrid(rows: number, cols: number): TableShape['props'] {
+  const r = Math.max(1, Math.min(MAX_ROWS, rows));
+  const c = Math.max(1, Math.min(MAX_COLS, cols));
+  const cells = Array.from({ length: r * c }, () => '');
+  const colWidths = Array.from({ length: c }, () => DEFAULT_COL_W);
+  const rowHeights = Array.from({ length: r }, () => DEFAULT_ROW_H);
   return {
-    w: DEFAULT_COLS * DEFAULT_COL_W,
-    h: DEFAULT_ROWS * DEFAULT_ROW_H,
-    rows: DEFAULT_ROWS,
-    cols: DEFAULT_COLS,
+    w: c * DEFAULT_COL_W,
+    h: r * DEFAULT_ROW_H,
+    rows: r,
+    cols: c,
     cells,
     colWidths,
     rowHeights,
@@ -92,7 +108,7 @@ export class TableShapeUtil extends BaseBoxShapeUtil<TableShape> {
   }
 
   override canEdit() {
-    return true;
+    return false; // 셀 단위 편집은 본 컴포넌트가 직접 setEditingShape 호출.
   }
   override canResize() {
     return true;
@@ -102,8 +118,6 @@ export class TableShapeUtil extends BaseBoxShapeUtil<TableShape> {
   }
 
   // 코너 핸들로 표 통째 리사이즈 — colWidths / rowHeights 도 같이 scale.
-  // resizeBox 의 generic 이 tldraw built-in shape union 으로 strict 라 cast 로 우회.
-  // info 의 정확한 type 도 같은 이유로 unknown — 런타임은 BaseBoxShapeUtil 의 box geom 만족하면 동작.
   override onResize(shape: TableShape, info: unknown) {
     const resize = resizeBox as unknown as (s: TableShape, i: unknown) => TableShape;
     const base = resize(shape, info);
@@ -137,7 +151,7 @@ export class TableShapeUtil extends BaseBoxShapeUtil<TableShape> {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Render — 셀 grid + 편집 + 리사이즈 핸들 + 추가/삭제 버튼
+// Render — 셀 grid + 편집 + 리사이즈 핸들 + 우클릭 메뉴
 // ──────────────────────────────────────────────────────────────────────────────
 
 function cellIdx(r: number, c: number, cols: number): number {
@@ -149,27 +163,41 @@ interface EditingCell {
   col: number;
 }
 
+interface ContextMenuState {
+  row: number;
+  col: number;
+  /** 카드 내부 좌표 (HTMLContainer 기준) */
+  x: number;
+  y: number;
+}
+
+const DOUBLE_CLICK_MS = 400;
+
 function TableShapeBody({ shape }: { shape: TableShape }) {
   const editor = useEditor();
   const { w, h, rows, cols, cells, colWidths, rowHeights } = shape.props;
+  // 'table' 이 tldraw closed TLShape union 에 없어서 cast — getCustomColor 는
+  // shape.meta 만 읽으므로 type 무관하게 동작.
+  const customHex = getCustomColor(shape as unknown as TLShape);
+  const borderColor = customHex ?? DEFAULT_BORDER_COLOR;
+  const cellLineColor = customHex ?? DEFAULT_CELL_LINE_COLOR;
 
-  // 본 shape 이 현재 tldraw 의 editing 상태인지 (rules: editingShapeId === shape.id).
-  // 편집 모드 진입 시점에 어느 셀을 편집할지 골라야 함 — 더블클릭 좌표를 잡아두고
-  // editingShapeId 가 set 되면 그 좌표 기반으로 셀 결정.
   const isEditing = useValue(
     'table-editing',
     () => editor.getEditingShapeId() === shape.id,
     [editor, shape.id],
   );
 
-  // 어느 셀을 편집 중인지 — 더블클릭한 위치로 결정. shape.meta 가 아닌 local state 라
-  // 다른 사용자에게 broadcast 되지 않음 (의도: 각자 다른 셀 동시 편집 가능, single-user
-  // 동시성 한계는 LWW).
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [draftText, setDraftText] = useState('');
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const lastClickRef = useRef<{ time: number; cellKey: string }>({
+    time: 0,
+    cellKey: '',
+  });
 
-  // editing 종료 (외부에서 editingShapeId=null 됨) 시 local state 정리.
+  // editing 종료 시 local state 정리.
   useEffect(() => {
     if (!isEditing) {
       setEditingCell(null);
@@ -189,13 +217,14 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingCell]);
 
-  const isSelected = useValue(
-    'table-selected',
-    () => editor.getSelectedShapeIds().includes(shape.id),
-    [editor, shape.id],
-  );
+  // 외부 클릭 시 context menu 닫기.
+  useEffect(() => {
+    if (!contextMenu) return;
+    const onAnyDown = () => setContextMenu(null);
+    window.addEventListener('pointerdown', onAnyDown);
+    return () => window.removeEventListener('pointerdown', onAnyDown);
+  }, [contextMenu]);
 
-  // 셀의 x/y 위치 누적 계산 (left/top 분만).
   const colLefts: number[] = [];
   {
     let acc = 0;
@@ -237,8 +266,44 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
     editor.setEditingShape(null);
   };
 
-  // 열 경계 드래그 — colWidths[i] 와 [i+1] 사이 너비 재분배 (전체 w 는 유지).
-  // 마지막 열은 i = cols-1 에서 오른쪽 끝 = 표 전체 확장.
+  // 셀 onPointerDown — 더블클릭 직접 탐지.
+  // 첫 번째 클릭: stopPropagation 안 함 → tldraw 가 표 selection 처리.
+  // 두 번째 클릭 (400ms 내, 같은 셀): stopPropagation + startEditCell.
+  const onCellPointerDown =
+    (r: number, c: number) => (e: React.PointerEvent<HTMLDivElement>) => {
+      // 우클릭 (button=2) 은 onContextMenu 가 처리. 더블클릭 카운팅 제외.
+      if (e.button === 2) return;
+      const cellKey = `${r}-${c}`;
+      const now = Date.now();
+      const last = lastClickRef.current;
+      if (last.cellKey === cellKey && now - last.time < DOUBLE_CLICK_MS) {
+        // 두 번째 클릭 — 편집 모드 진입.
+        e.stopPropagation();
+        e.preventDefault();
+        lastClickRef.current = { time: 0, cellKey: '' };
+        // 이미 같은 셀 편집 중이면 no-op.
+        if (!isEditing || editingCell?.row !== r || editingCell?.col !== c) {
+          startEditCell(r, c);
+        }
+      } else {
+        lastClickRef.current = { time: now, cellKey };
+      }
+    };
+
+  // 우클릭 컨텍스트 메뉴 열기.
+  const onCellContextMenu =
+    (r: number, c: number) => (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // 카드 내부 상대 좌표 (HTMLContainer 의 bounding rect 기준).
+      const container = (e.currentTarget as HTMLElement).closest('.tl-html-container');
+      const rect = container?.getBoundingClientRect();
+      const x = rect ? e.clientX - rect.left : e.clientX;
+      const y = rect ? e.clientY - rect.top : e.clientY;
+      setContextMenu({ row: r, col: c, x, y });
+    };
+
+  // 열 경계 드래그 — colWidths[i] 와 [i+1] 사이 너비 재분배.
   const onColDividerDown =
     (col: number) => (e: React.PointerEvent<HTMLDivElement>) => {
       e.stopPropagation();
@@ -250,10 +315,8 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
         const delta = ev.clientX - startX;
         const next = startWidths.slice();
         if (isLast) {
-          // 마지막 열은 표 전체 확장 — colWidths[last] += delta.
           next[col] = Math.max(MIN_COL_W, startWidths[col]! + delta);
         } else {
-          // 가운데 경계 — 좌측 열 확장, 우측 열 축소 (또는 그 반대).
           const left = startWidths[col]! + delta;
           const right = startWidths[col + 1]! - delta;
           if (left < MIN_COL_W || right < MIN_COL_W) return;
@@ -322,7 +385,7 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
         width: w,
         height: h,
         background: 'white',
-        border: '1px solid #2A2A38',
+        border: `1px solid ${borderColor}`,
         borderRadius: 6,
         boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
         position: 'relative',
@@ -347,10 +410,8 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
           return (
             <div
               key={`cell-${r}-${c}`}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                startEditCell(r, c);
-              }}
+              onPointerDown={onCellPointerDown(r, c)}
+              onContextMenu={onCellContextMenu(r, c)}
               style={{
                 position: 'absolute',
                 left,
@@ -358,9 +419,9 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
                 width: cw,
                 height: rh,
                 borderRight:
-                  c < cols - 1 ? '1px solid #DCDCE0' : 'none',
+                  c < cols - 1 ? `1px solid ${cellLineColor}` : 'none',
                 borderBottom:
-                  r < rows - 1 ? '1px solid #DCDCE0' : 'none',
+                  r < rows - 1 ? `1px solid ${cellLineColor}` : 'none',
                 padding: '4px 6px',
                 display: 'flex',
                 alignItems: 'flex-start',
@@ -368,10 +429,10 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
                 fontSize: 12,
                 lineHeight: 1.3,
                 background: isThisEditing ? '#F7F7F8' : 'transparent',
-                cursor: isSelected ? 'text' : 'default',
+                cursor: 'text',
                 overflow: 'hidden',
               }}
-              title={value || '더블클릭해서 편집'}
+              title={value || '더블클릭해서 편집 · 우클릭해서 메뉴'}
             >
               {isThisEditing ? (
                 <textarea
@@ -380,7 +441,6 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
                   onChange={(e) => setDraftText(e.target.value)}
                   onBlur={commitEdit}
                   onKeyDown={(e) => {
-                    // tldraw 가 Del/arrow/cmd+Z 등 가로채지 않게 stop.
                     e.stopPropagation();
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -389,7 +449,6 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
                       e.preventDefault();
                       cancelEdit();
                     } else if (e.key === 'Tab') {
-                      // Tab → 다음 셀로 이동 + commit
                       e.preventDefault();
                       commitEdit();
                       const nextC = c + 1 < cols ? c + 1 : 0;
@@ -436,8 +495,7 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
         }),
       )}
 
-      {/* 열 경계 드래그 핸들 — col index 0..cols-1 의 우측 경계.
-          마지막 열은 표 오른쪽 끝 → 표 전체 확장. */}
+      {/* 열 경계 드래그 핸들. */}
       {Array.from({ length: cols }).map((_, c) => {
         const left = (colLefts[c] ?? 0) + (colWidths[c] ?? DEFAULT_COL_W);
         return (
@@ -486,165 +544,194 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
         );
       })}
 
-      {/* 표 선택 시 외곽에 행/열 추가·삭제 컨트롤 노출.
-          - 오른쪽 가장자리: 열 +/- (마지막 열 기준)
-          - 아래쪽 가장자리: 행 +/- (마지막 행 기준) */}
-      {isSelected && !isEditing && (
-        <>
-          <StructureButton
-            label="열 추가"
-            sign="+"
-            disabled={cols >= MAX_COLS}
-            style={{ right: -34, top: h / 2 - 12 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              addCol(editor, shape);
-            }}
-          />
-          <StructureButton
-            label="마지막 열 삭제"
-            sign="−"
-            disabled={cols <= 1}
-            style={{ right: -34, top: h / 2 + 18 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              removeCol(editor, shape);
-            }}
-          />
-          <StructureButton
-            label="행 추가"
-            sign="+"
-            disabled={rows >= MAX_ROWS}
-            style={{ bottom: -34, left: w / 2 - 30 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              addRow(editor, shape);
-            }}
-          />
-          <StructureButton
-            label="마지막 행 삭제"
-            sign="−"
-            disabled={rows <= 1}
-            style={{ bottom: -34, left: w / 2 + 6 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              removeRow(editor, shape);
-            }}
-          />
-        </>
+      {/* 우클릭 컨텍스트 메뉴 — 행/열 추가·삭제. 외부 클릭 시 자동 닫힘. */}
+      {contextMenu && !isEditing && (
+        <ContextMenu
+          state={contextMenu}
+          rows={rows}
+          cols={cols}
+          onAddRowAbove={() => {
+            addRowAt(editor, shape, contextMenu.row);
+            setContextMenu(null);
+          }}
+          onAddRowBelow={() => {
+            addRowAt(editor, shape, contextMenu.row + 1);
+            setContextMenu(null);
+          }}
+          onAddColLeft={() => {
+            addColAt(editor, shape, contextMenu.col);
+            setContextMenu(null);
+          }}
+          onAddColRight={() => {
+            addColAt(editor, shape, contextMenu.col + 1);
+            setContextMenu(null);
+          }}
+          onRemoveRow={() => {
+            removeRowAt(editor, shape, contextMenu.row);
+            setContextMenu(null);
+          }}
+          onRemoveCol={() => {
+            removeColAt(editor, shape, contextMenu.col);
+            setContextMenu(null);
+          }}
+        />
       )}
     </HTMLContainer>
   );
 }
 
-function StructureButton({
+// ──────────────────────────────────────────────────────────────────────────────
+// 컨텍스트 메뉴 — 표 내부에 absolute 로 띄움
+// ──────────────────────────────────────────────────────────────────────────────
+
+interface ContextMenuProps {
+  state: ContextMenuState;
+  rows: number;
+  cols: number;
+  onAddRowAbove: () => void;
+  onAddRowBelow: () => void;
+  onAddColLeft: () => void;
+  onAddColRight: () => void;
+  onRemoveRow: () => void;
+  onRemoveCol: () => void;
+}
+
+function ContextMenu({
+  state,
+  rows,
+  cols,
+  onAddRowAbove,
+  onAddRowBelow,
+  onAddColLeft,
+  onAddColRight,
+  onRemoveRow,
+  onRemoveCol,
+}: ContextMenuProps) {
+  // 클릭한 셀 위치를 기준으로 메뉴 표시. 표 영역을 벗어나도 OK (overflow: visible).
+  return (
+    <div
+      onPointerDown={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()}
+      style={{
+        position: 'absolute',
+        left: state.x,
+        top: state.y,
+        minWidth: 180,
+        background: 'white',
+        color: '#1f1f2a',
+        border: '1px solid #DCDCE0',
+        borderRadius: 6,
+        boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
+        padding: '4px 0',
+        zIndex: 10,
+        fontSize: 12,
+        fontFamily: 'inherit',
+      }}
+    >
+      <MenuItem
+        label={`${state.row + 1}행 위에 행 추가`}
+        disabled={rows >= MAX_ROWS}
+        onSelect={onAddRowAbove}
+      />
+      <MenuItem
+        label={`${state.row + 1}행 아래에 행 추가`}
+        disabled={rows >= MAX_ROWS}
+        onSelect={onAddRowBelow}
+      />
+      <MenuItem
+        label={`${state.col + 1}열 왼쪽에 열 추가`}
+        disabled={cols >= MAX_COLS}
+        onSelect={onAddColLeft}
+      />
+      <MenuItem
+        label={`${state.col + 1}열 오른쪽에 열 추가`}
+        disabled={cols >= MAX_COLS}
+        onSelect={onAddColRight}
+      />
+      <div style={{ borderTop: '1px solid #ECECEF', margin: '4px 0' }} />
+      <MenuItem
+        label={`${state.row + 1}행 삭제`}
+        disabled={rows <= 1}
+        onSelect={onRemoveRow}
+        danger
+      />
+      <MenuItem
+        label={`${state.col + 1}열 삭제`}
+        disabled={cols <= 1}
+        onSelect={onRemoveCol}
+        danger
+      />
+    </div>
+  );
+}
+
+function MenuItem({
   label,
-  sign,
   disabled,
-  style,
-  onClick,
+  onSelect,
+  danger,
 }: {
   label: string;
-  sign: string;
-  disabled: boolean;
-  style: React.CSSProperties;
-  onClick: (e: React.MouseEvent) => void;
+  disabled?: boolean;
+  onSelect: () => void;
+  danger?: boolean;
 }) {
   return (
     <button
       type="button"
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={onClick}
       disabled={disabled}
-      title={label}
-      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!disabled) onSelect();
+      }}
       style={{
-        position: 'absolute',
-        width: 24,
-        height: 24,
-        borderRadius: '50%',
-        background: disabled ? '#DCDCE0' : '#1F1F2A',
-        color: disabled ? '#9A9AA8' : '#F5F5F7',
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        padding: '6px 12px',
         border: 'none',
+        background: 'transparent',
+        color: disabled ? '#9A9AA8' : danger ? '#FF3D5A' : '#1f1f2a',
         cursor: disabled ? 'not-allowed' : 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: 16,
-        fontWeight: 600,
-        lineHeight: 1,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
-        pointerEvents: 'all',
-        zIndex: 3,
-        ...style,
+        fontSize: 12,
+        fontFamily: 'inherit',
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) e.currentTarget.style.background = '#F7F7F8';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent';
       }}
     >
-      {sign}
+      {label}
     </button>
   );
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 구조 편집 헬퍼 — 행/열 추가·삭제
+// 구조 편집 헬퍼 — 행/열 임의 위치에 삽입·삭제
 // ──────────────────────────────────────────────────────────────────────────────
 
-function addCol(editor: ReturnType<typeof useEditor>, shape: TableShape) {
-  const { rows, cols, cells, colWidths, w } = shape.props;
-  if (cols >= MAX_COLS) return;
-  const newCols = cols + 1;
-  const newCells = Array.from({ length: rows * newCols }, () => '');
-  // 기존 셀들을 새 행/열 구조로 복사 (오른쪽에 빈 열 추가).
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      newCells[r * newCols + c] = cells[r * cols + c] ?? '';
-    }
-  }
-  const newColWidths = [...colWidths, DEFAULT_COL_W];
-  updateTableShape(
-    editor,
-    shape,
-    {
-      cols: newCols,
-      cells: newCells,
-      colWidths: newColWidths,
-      w: w + DEFAULT_COL_W,
-    },
-    'table-add-col',
-  );
-}
-
-function removeCol(editor: ReturnType<typeof useEditor>, shape: TableShape) {
-  const { rows, cols, cells, colWidths, w } = shape.props;
-  if (cols <= 1) return;
-  const newCols = cols - 1;
-  const removed = cols - 1;
-  const newCells: string[] = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      if (c === removed) continue;
-      newCells.push(cells[r * cols + c] ?? '');
-    }
-  }
-  const newColWidths = colWidths.slice(0, removed);
-  const removedW = colWidths[removed] ?? DEFAULT_COL_W;
-  updateTableShape(
-    editor,
-    shape,
-    {
-      cols: newCols,
-      cells: newCells,
-      colWidths: newColWidths,
-      w: w - removedW,
-    },
-    'table-remove-col',
-  );
-}
-
-function addRow(editor: ReturnType<typeof useEditor>, shape: TableShape) {
+/** rowIndex 위치에 빈 행 삽입 (rowIndex=0 이면 맨 위, rowIndex=rows 면 맨 아래). */
+function addRowAt(
+  editor: ReturnType<typeof useEditor>,
+  shape: TableShape,
+  rowIndex: number,
+) {
   const { rows, cols, cells, rowHeights, h } = shape.props;
   if (rows >= MAX_ROWS) return;
-  const newCells = [...cells, ...Array.from({ length: cols }, () => '')];
-  const newRowHeights = [...rowHeights, DEFAULT_ROW_H];
+  const insertAt = Math.max(0, Math.min(rows, rowIndex));
+  const newRowCells = Array.from({ length: cols }, () => '');
+  const newCells = [
+    ...cells.slice(0, insertAt * cols),
+    ...newRowCells,
+    ...cells.slice(insertAt * cols),
+  ];
+  const newRowHeights = [
+    ...rowHeights.slice(0, insertAt),
+    DEFAULT_ROW_H,
+    ...rowHeights.slice(insertAt),
+  ];
   updateTableShape(
     editor,
     shape,
@@ -658,13 +745,62 @@ function addRow(editor: ReturnType<typeof useEditor>, shape: TableShape) {
   );
 }
 
-function removeRow(editor: ReturnType<typeof useEditor>, shape: TableShape) {
+/** colIndex 위치에 빈 열 삽입. */
+function addColAt(
+  editor: ReturnType<typeof useEditor>,
+  shape: TableShape,
+  colIndex: number,
+) {
+  const { rows, cols, cells, colWidths, w } = shape.props;
+  if (cols >= MAX_COLS) return;
+  const insertAt = Math.max(0, Math.min(cols, colIndex));
+  const newCols = cols + 1;
+  const newCells: string[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < newCols; c++) {
+      if (c === insertAt) {
+        newCells.push('');
+      } else {
+        const oldC = c < insertAt ? c : c - 1;
+        newCells.push(cells[r * cols + oldC] ?? '');
+      }
+    }
+  }
+  const newColWidths = [
+    ...colWidths.slice(0, insertAt),
+    DEFAULT_COL_W,
+    ...colWidths.slice(insertAt),
+  ];
+  updateTableShape(
+    editor,
+    shape,
+    {
+      cols: newCols,
+      cells: newCells,
+      colWidths: newColWidths,
+      w: w + DEFAULT_COL_W,
+    },
+    'table-add-col',
+  );
+}
+
+function removeRowAt(
+  editor: ReturnType<typeof useEditor>,
+  shape: TableShape,
+  rowIndex: number,
+) {
   const { rows, cols, cells, rowHeights, h } = shape.props;
   if (rows <= 1) return;
-  const removed = rows - 1;
-  const newCells = cells.slice(0, removed * cols);
-  const newRowHeights = rowHeights.slice(0, removed);
-  const removedH = rowHeights[removed] ?? DEFAULT_ROW_H;
+  const idx = Math.max(0, Math.min(rows - 1, rowIndex));
+  const newCells = [
+    ...cells.slice(0, idx * cols),
+    ...cells.slice((idx + 1) * cols),
+  ];
+  const removed = rowHeights[idx] ?? DEFAULT_ROW_H;
+  const newRowHeights = [
+    ...rowHeights.slice(0, idx),
+    ...rowHeights.slice(idx + 1),
+  ];
   updateTableShape(
     editor,
     shape,
@@ -672,9 +808,42 @@ function removeRow(editor: ReturnType<typeof useEditor>, shape: TableShape) {
       rows: rows - 1,
       cells: newCells,
       rowHeights: newRowHeights,
-      h: h - removedH,
+      h: h - removed,
     },
     'table-remove-row',
+  );
+}
+
+function removeColAt(
+  editor: ReturnType<typeof useEditor>,
+  shape: TableShape,
+  colIndex: number,
+) {
+  const { rows, cols, cells, colWidths, w } = shape.props;
+  if (cols <= 1) return;
+  const idx = Math.max(0, Math.min(cols - 1, colIndex));
+  const newCells: string[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (c === idx) continue;
+      newCells.push(cells[r * cols + c] ?? '');
+    }
+  }
+  const removed = colWidths[idx] ?? DEFAULT_COL_W;
+  const newColWidths = [
+    ...colWidths.slice(0, idx),
+    ...colWidths.slice(idx + 1),
+  ];
+  updateTableShape(
+    editor,
+    shape,
+    {
+      cols: cols - 1,
+      cells: newCells,
+      colWidths: newColWidths,
+      w: w - removed,
+    },
+    'table-remove-col',
   );
 }
 

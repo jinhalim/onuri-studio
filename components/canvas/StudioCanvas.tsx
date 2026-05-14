@@ -15,7 +15,8 @@ import 'tldraw/tldraw.css';
 import { customShapeUtils } from './customShapeUtils';
 import { CustomStylePanel, getPendingCustomColor } from './CustomStylePanel';
 import { CustomToolbar } from './CustomToolbar';
-import { NoteAuthorLayer } from './NoteAuthorLayer';
+// NoteAuthorLayer 는 D-020 부터 미사용 — author 라벨은 노트 도형 내부에 inline 렌더로 이전
+// (다른 도형이 노트를 가리면 라벨도 함께 가려지도록 z-index 통일).
 import { OnboardingOverlay } from '@/components/story/OnboardingOverlay';
 import { RequestEditButton } from '@/components/story/RequestEditButton';
 // cn 은 SaveIndicator 제거 후 미사용 → import 도 삭제
@@ -578,7 +579,6 @@ export function StudioCanvas({
         components={tldrawComponents}
         licenseKey={process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY}
       />
-      <NoteAuthorLayer editor={editor} />
       <RemoteLaserLayer strokes={allLaserStrokes} editor={editor} />
       <PresenceLayer presences={presences} editor={editor} currentUserId={currentUserId} />
       <OnboardingForEmptyBoard editor={editor} storyId={storyId} />
