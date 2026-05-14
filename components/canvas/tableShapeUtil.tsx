@@ -37,6 +37,18 @@ import { getCustomColor } from './customShapeUtils-shared';
 // Shape definition
 // ──────────────────────────────────────────────────────────────────────────────
 
+/**
+ * 셀 병합 정의. (row, col) = 병합 영역의 좌상단 셀.
+ * rowspan/colspan = 그 셀이 차지하는 행/열 개수 (둘 다 ≥ 1, 둘 다 1이면 사실상 미병합).
+ * 병합 영역 안의 다른 셀 좌표 (row+1, col 등) 들은 render 에서 skip.
+ */
+export interface CellMerge {
+  row: number;
+  col: number;
+  rowspan: number;
+  colspan: number;
+}
+
 export type TableShape = TLBaseShape<
   'table',
   {
@@ -47,6 +59,8 @@ export type TableShape = TLBaseShape<
     cells: string[];
     colWidths: number[];
     rowHeights: number[];
+    /** 셀 병합 목록. 빈 배열이면 모든 셀이 개별. */
+    cellMerges: CellMerge[];
   }
 >;
 
@@ -82,6 +96,7 @@ export function propsForGrid(rows: number, cols: number): TableShape['props'] {
     cells,
     colWidths,
     rowHeights,
+    cellMerges: [],
   };
 }
 
@@ -97,6 +112,14 @@ export class TableShapeUtil extends BaseBoxShapeUtil<TableShape> {
     cells: T.arrayOf(T.string),
     colWidths: T.arrayOf(T.number),
     rowHeights: T.arrayOf(T.number),
+    cellMerges: T.arrayOf(
+      T.object({
+        row: T.number,
+        col: T.number,
+        rowspan: T.number,
+        colspan: T.number,
+      }),
+    ),
   };
 
   override getDefaultProps(): TableShape['props'] {
@@ -158,6 +181,77 @@ function cellIdx(r: number, c: number, cols: number): number {
   return r * cols + c;
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// 셀 병합 헬퍼
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** (r, c) 셀이 속한 병합 영역. 없으면 null. */
+function findMergeFor(
+  r: number,
+  c: number,
+  merges: CellMerge[],
+): CellMerge | null {
+  for (const m of merges) {
+    if (
+      m.row <= r &&
+      r < m.row + m.rowspan &&
+      m.col <= c &&
+      c < m.col + m.colspan
+    ) {
+      return m;
+    }
+  }
+  return null;
+}
+
+/** (r, c) 가 병합 영역의 좌상단 (owner) 인지. */
+function isMergeOwner(
+  r: number,
+  c: number,
+  merges: CellMerge[],
+): CellMerge | null {
+  const m = merges.find((mm) => mm.row === r && mm.col === c);
+  return m ?? null;
+}
+
+/** (r, c) 가 병합 영역 안이지만 좌상단이 아닌 경우 (render 에서 skip). */
+function isCovered(r: number, c: number, merges: CellMerge[]): boolean {
+  const m = findMergeFor(r, c, merges);
+  return m !== null && !(m.row === r && m.col === c);
+}
+
+interface CellRange {
+  startRow: number;
+  startCol: number;
+  endRow: number;
+  endCol: number;
+}
+
+function normalizeRange(range: CellRange): {
+  minRow: number;
+  maxRow: number;
+  minCol: number;
+  maxCol: number;
+} {
+  return {
+    minRow: Math.min(range.startRow, range.endRow),
+    maxRow: Math.max(range.startRow, range.endRow),
+    minCol: Math.min(range.startCol, range.endCol),
+    maxCol: Math.max(range.startCol, range.endCol),
+  };
+}
+
+function isInRange(r: number, c: number, range: CellRange | null): boolean {
+  if (!range) return false;
+  const n = normalizeRange(range);
+  return r >= n.minRow && r <= n.maxRow && c >= n.minCol && c <= n.maxCol;
+}
+
+function rangeCellCount(range: CellRange): number {
+  const n = normalizeRange(range);
+  return (n.maxRow - n.minRow + 1) * (n.maxCol - n.minCol + 1);
+}
+
 interface EditingCell {
   row: number;
   col: number;
@@ -176,6 +270,8 @@ const DOUBLE_CLICK_MS = 400;
 function TableShapeBody({ shape }: { shape: TableShape }) {
   const editor = useEditor();
   const { w, h, rows, cols, cells, colWidths, rowHeights } = shape.props;
+  // cellMerges 는 props 에 없을 수도 있음 (이전 버전 호환) — fallback to [].
+  const cellMerges = shape.props.cellMerges ?? [];
   // 'table' 이 tldraw closed TLShape union 에 없어서 cast — getCustomColor 는
   // shape.meta 만 읽으므로 type 무관하게 동작.
   const customHex = getCustomColor(shape as unknown as TLShape);
@@ -191,6 +287,9 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [draftText, setDraftText] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  // 다중 셀 선택 범위 — shift+click 으로 확장.
+  // null 이면 미선택. 단일 셀 = startRow=endRow & startCol=endCol.
+  const [cellRange, setCellRange] = useState<CellRange | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastClickRef = useRef<{ time: number; cellKey: string }>({
     time: 0,
@@ -266,36 +365,52 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
     editor.setEditingShape(null);
   };
 
-  // 셀 onPointerDown — 더블클릭 직접 탐지.
-  // 첫 번째 클릭: stopPropagation 안 함 → tldraw 가 표 selection 처리.
-  // 두 번째 클릭 (400ms 내, 같은 셀): stopPropagation + startEditCell.
+  // 셀 onPointerDown — 더블클릭 직접 탐지 + Shift+click 으로 범위 선택.
+  //   - 일반 클릭: 단일 셀 선택 + tldraw 가 표 자체도 선택 (stopPropagation 안 함).
+  //   - Shift+click: 기존 시작점에서 클릭 셀까지 범위 확장.
+  //   - 더블 클릭 (400ms 내, 같은 셀): 편집 모드 진입.
   const onCellPointerDown =
     (r: number, c: number) => (e: React.PointerEvent<HTMLDivElement>) => {
-      // 우클릭 (button=2) 은 onContextMenu 가 처리. 더블클릭 카운팅 제외.
-      if (e.button === 2) return;
+      if (e.button === 2) return; // 우클릭은 onContextMenu 가 처리.
       const cellKey = `${r}-${c}`;
       const now = Date.now();
       const last = lastClickRef.current;
       if (last.cellKey === cellKey && now - last.time < DOUBLE_CLICK_MS) {
-        // 두 번째 클릭 — 편집 모드 진입.
         e.stopPropagation();
         e.preventDefault();
         lastClickRef.current = { time: 0, cellKey: '' };
-        // 이미 같은 셀 편집 중이면 no-op.
         if (!isEditing || editingCell?.row !== r || editingCell?.col !== c) {
           startEditCell(r, c);
         }
+        return;
+      }
+      lastClickRef.current = { time: now, cellKey };
+
+      if (e.shiftKey && cellRange) {
+        // Shift+click — 기존 시작점에서 현재 셀까지 확장. tldraw 의 shape 이동을 막기 위해 stop.
+        e.stopPropagation();
+        setCellRange({
+          startRow: cellRange.startRow,
+          startCol: cellRange.startCol,
+          endRow: r,
+          endCol: c,
+        });
       } else {
-        lastClickRef.current = { time: now, cellKey };
+        // 단일 셀 선택. tldraw 가 표 자체 select / drag 처리 가능하도록 propagate.
+        setCellRange({ startRow: r, startCol: c, endRow: r, endCol: c });
       }
     };
 
   // 우클릭 컨텍스트 메뉴 열기.
+  // 클릭한 셀이 현재 cellRange 안에 없으면 단일 셀 range 로 갱신 — "내가 클릭한 셀이 선택돼야"
+  // 직관적. 안에 있으면 range 그대로 유지 (병합 옵션 노출).
   const onCellContextMenu =
     (r: number, c: number) => (e: React.MouseEvent<HTMLDivElement>) => {
       e.preventDefault();
       e.stopPropagation();
-      // 카드 내부 상대 좌표 (HTMLContainer 의 bounding rect 기준).
+      if (!isInRange(r, c, cellRange)) {
+        setCellRange({ startRow: r, startCol: c, endRow: r, endCol: c });
+      }
       const container = (e.currentTarget as HTMLElement).closest('.tl-html-container');
       const rect = container?.getBoundingClientRect();
       const x = rect ? e.clientX - rect.left : e.clientX;
@@ -396,17 +511,40 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
         overflow: 'visible',
       }}
     >
-      {/* 셀 grid */}
+      {/* 셀 grid — 병합 처리:
+            covered 셀 (병합 영역 안 비-owner) 은 render 안 함.
+            owner 셀은 rowspan/colspan 만큼 width/height 확장 + 우/하 border 는 병합 영역의
+            바깥쪽에만 그림. */}
       {Array.from({ length: rows }).map((_, r) =>
         Array.from({ length: cols }).map((_, c) => {
+          if (isCovered(r, c, cellMerges)) return null;
+          const owner = isMergeOwner(r, c, cellMerges);
+          const rowspan = owner?.rowspan ?? 1;
+          const colspan = owner?.colspan ?? 1;
           const idx = cellIdx(r, c, cols);
           const left = colLefts[c] ?? 0;
           const top = rowTops[r] ?? 0;
-          const cw = colWidths[c] ?? DEFAULT_COL_W;
-          const rh = rowHeights[r] ?? DEFAULT_ROW_H;
+          // 병합된 셀은 spanned cols/rows 전체 너비/높이 합산.
+          let cw = 0;
+          for (let i = 0; i < colspan; i++) {
+            cw += colWidths[c + i] ?? DEFAULT_COL_W;
+          }
+          let rh = 0;
+          for (let i = 0; i < rowspan; i++) {
+            rh += rowHeights[r + i] ?? DEFAULT_ROW_H;
+          }
           const isThisEditing =
             isEditing && editingCell?.row === r && editingCell?.col === c;
           const value = cells[idx] ?? '';
+          const isInSelection = isInRange(r, c, cellRange);
+          // 마지막 열/행에 닿으면 표 외곽 border 가 처리 — 셀 내부 border 안 그림.
+          const reachesRightEdge = c + colspan >= cols;
+          const reachesBottomEdge = r + rowspan >= rows;
+          const cellBg = isThisEditing
+            ? '#F7F7F8'
+            : isInSelection
+              ? 'rgba(79, 209, 197, 0.18)' // 선택 강조 — accent-live 의 옅은 톤
+              : 'transparent';
           return (
             <div
               key={`cell-${r}-${c}`}
@@ -418,17 +556,19 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
                 top,
                 width: cw,
                 height: rh,
-                borderRight:
-                  c < cols - 1 ? `1px solid ${cellLineColor}` : 'none',
-                borderBottom:
-                  r < rows - 1 ? `1px solid ${cellLineColor}` : 'none',
+                borderRight: !reachesRightEdge
+                  ? `1px solid ${cellLineColor}`
+                  : 'none',
+                borderBottom: !reachesBottomEdge
+                  ? `1px solid ${cellLineColor}`
+                  : 'none',
                 padding: '4px 6px',
                 display: 'flex',
                 alignItems: 'flex-start',
                 justifyContent: 'flex-start',
                 fontSize: 12,
                 lineHeight: 1.3,
-                background: isThisEditing ? '#F7F7F8' : 'transparent',
+                background: cellBg,
                 cursor: 'text',
                 overflow: 'hidden',
               }}
@@ -544,12 +684,18 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
         );
       })}
 
-      {/* 우클릭 컨텍스트 메뉴 — 행/열 추가·삭제. 외부 클릭 시 자동 닫힘. */}
+      {/* 우클릭 컨텍스트 메뉴 — 행/열 추가·삭제 + 셀 병합/해제. 외부 클릭 시 자동 닫힘. */}
       {contextMenu && !isEditing && (
         <ContextMenu
           state={contextMenu}
           rows={rows}
           cols={cols}
+          canMerge={
+            cellRange !== null &&
+            isInRange(contextMenu.row, contextMenu.col, cellRange) &&
+            rangeCellCount(cellRange) > 1
+          }
+          mergeAt={isMergeOwner(contextMenu.row, contextMenu.col, cellMerges)}
           onAddRowAbove={() => {
             addRowAt(editor, shape, contextMenu.row);
             setContextMenu(null);
@@ -574,6 +720,25 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
             removeColAt(editor, shape, contextMenu.col);
             setContextMenu(null);
           }}
+          onMerge={() => {
+            if (cellRange) {
+              mergeCells(editor, shape, cellRange);
+              setCellRange({
+                startRow: normalizeRange(cellRange).minRow,
+                startCol: normalizeRange(cellRange).minCol,
+                endRow: normalizeRange(cellRange).minRow,
+                endCol: normalizeRange(cellRange).minCol,
+              });
+            }
+            setContextMenu(null);
+          }}
+          onUnmerge={() => {
+            const owner = isMergeOwner(contextMenu.row, contextMenu.col, cellMerges);
+            if (owner) {
+              unmergeCells(editor, shape, owner);
+            }
+            setContextMenu(null);
+          }}
         />
       )}
     </HTMLContainer>
@@ -588,24 +753,34 @@ interface ContextMenuProps {
   state: ContextMenuState;
   rows: number;
   cols: number;
+  /** 선택 범위가 2 셀 이상이고 클릭한 셀이 범위 안인지. */
+  canMerge: boolean;
+  /** 클릭한 셀이 병합 영역의 owner 면 그 merge 객체. 아니면 null. */
+  mergeAt: CellMerge | null;
   onAddRowAbove: () => void;
   onAddRowBelow: () => void;
   onAddColLeft: () => void;
   onAddColRight: () => void;
   onRemoveRow: () => void;
   onRemoveCol: () => void;
+  onMerge: () => void;
+  onUnmerge: () => void;
 }
 
 function ContextMenu({
   state,
   rows,
   cols,
+  canMerge,
+  mergeAt,
   onAddRowAbove,
   onAddRowBelow,
   onAddColLeft,
   onAddColRight,
   onRemoveRow,
   onRemoveCol,
+  onMerge,
+  onUnmerge,
 }: ContextMenuProps) {
   // 클릭한 셀 위치를 기준으로 메뉴 표시. 표 영역을 벗어나도 OK (overflow: visible).
   return (
@@ -648,6 +823,20 @@ function ContextMenu({
         disabled={cols >= MAX_COLS}
         onSelect={onAddColRight}
       />
+      {(canMerge || mergeAt) && (
+        <>
+          <div style={{ borderTop: '1px solid #ECECEF', margin: '4px 0' }} />
+          {canMerge && !mergeAt && (
+            <MenuItem label="선택한 셀들 병합" onSelect={onMerge} />
+          )}
+          {mergeAt && (
+            <MenuItem
+              label={`병합 해제 (${mergeAt.rowspan} × ${mergeAt.colspan})`}
+              onSelect={onUnmerge}
+            />
+          )}
+        </>
+      )}
       <div style={{ borderTop: '1px solid #ECECEF', margin: '4px 0' }} />
       <MenuItem
         label={`${state.row + 1}행 삭제`}
@@ -709,8 +898,66 @@ function MenuItem({
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 구조 편집 헬퍼 — 행/열 임의 위치에 삽입·삭제
+// 구조 편집 헬퍼 — 행/열 임의 위치에 삽입·삭제 + 셀 병합/해제
 // ──────────────────────────────────────────────────────────────────────────────
+
+/** 행 삽입 시 cellMerges 조정.
+ *   - merge 가 insertAt 위쪽에 완전히 있으면 변화 없음.
+ *   - merge.row >= insertAt 면 row += 1 (아래로 밀림).
+ *   - merge 가 insertAt 을 가로지르면 (merge.row < insertAt < merge.row+rowspan) rowspan += 1.
+ */
+function shiftMergesForAddRow(merges: CellMerge[], insertAt: number): CellMerge[] {
+  return merges.map((m) => {
+    if (m.row >= insertAt) return { ...m, row: m.row + 1 };
+    if (m.row + m.rowspan > insertAt) return { ...m, rowspan: m.rowspan + 1 };
+    return m;
+  });
+}
+
+function shiftMergesForAddCol(merges: CellMerge[], insertAt: number): CellMerge[] {
+  return merges.map((m) => {
+    if (m.col >= insertAt) return { ...m, col: m.col + 1 };
+    if (m.col + m.colspan > insertAt) return { ...m, colspan: m.colspan + 1 };
+    return m;
+  });
+}
+
+/** 행 삭제 시 cellMerges 조정. rowspan/colspan 이 1 이하가 되면 merge 제거. */
+function shiftMergesForRemoveRow(merges: CellMerge[], idx: number): CellMerge[] {
+  const next: CellMerge[] = [];
+  for (const m of merges) {
+    if (m.row > idx) {
+      next.push({ ...m, row: m.row - 1 });
+    } else if (m.row + m.rowspan <= idx) {
+      next.push(m);
+    } else {
+      // 삭제되는 행이 merge 안에 포함 → rowspan 감소.
+      const newRowspan = m.rowspan - 1;
+      if (newRowspan >= 1 && (newRowspan > 1 || m.colspan > 1)) {
+        next.push({ ...m, rowspan: newRowspan });
+      }
+      // newRowspan === 0 (단일 행 merge) 또는 1×1 으로 축소 시 제거.
+    }
+  }
+  return next;
+}
+
+function shiftMergesForRemoveCol(merges: CellMerge[], idx: number): CellMerge[] {
+  const next: CellMerge[] = [];
+  for (const m of merges) {
+    if (m.col > idx) {
+      next.push({ ...m, col: m.col - 1 });
+    } else if (m.col + m.colspan <= idx) {
+      next.push(m);
+    } else {
+      const newColspan = m.colspan - 1;
+      if (newColspan >= 1 && (m.rowspan > 1 || newColspan > 1)) {
+        next.push({ ...m, colspan: newColspan });
+      }
+    }
+  }
+  return next;
+}
 
 /** rowIndex 위치에 빈 행 삽입 (rowIndex=0 이면 맨 위, rowIndex=rows 면 맨 아래). */
 function addRowAt(
@@ -719,6 +966,7 @@ function addRowAt(
   rowIndex: number,
 ) {
   const { rows, cols, cells, rowHeights, h } = shape.props;
+  const cellMerges = shape.props.cellMerges ?? [];
   if (rows >= MAX_ROWS) return;
   const insertAt = Math.max(0, Math.min(rows, rowIndex));
   const newRowCells = Array.from({ length: cols }, () => '');
@@ -740,6 +988,7 @@ function addRowAt(
       cells: newCells,
       rowHeights: newRowHeights,
       h: h + DEFAULT_ROW_H,
+      cellMerges: shiftMergesForAddRow(cellMerges, insertAt),
     },
     'table-add-row',
   );
@@ -752,6 +1001,7 @@ function addColAt(
   colIndex: number,
 ) {
   const { rows, cols, cells, colWidths, w } = shape.props;
+  const cellMerges = shape.props.cellMerges ?? [];
   if (cols >= MAX_COLS) return;
   const insertAt = Math.max(0, Math.min(cols, colIndex));
   const newCols = cols + 1;
@@ -779,6 +1029,7 @@ function addColAt(
       cells: newCells,
       colWidths: newColWidths,
       w: w + DEFAULT_COL_W,
+      cellMerges: shiftMergesForAddCol(cellMerges, insertAt),
     },
     'table-add-col',
   );
@@ -790,6 +1041,7 @@ function removeRowAt(
   rowIndex: number,
 ) {
   const { rows, cols, cells, rowHeights, h } = shape.props;
+  const cellMerges = shape.props.cellMerges ?? [];
   if (rows <= 1) return;
   const idx = Math.max(0, Math.min(rows - 1, rowIndex));
   const newCells = [
@@ -809,6 +1061,7 @@ function removeRowAt(
       cells: newCells,
       rowHeights: newRowHeights,
       h: h - removed,
+      cellMerges: shiftMergesForRemoveRow(cellMerges, idx),
     },
     'table-remove-row',
   );
@@ -820,6 +1073,7 @@ function removeColAt(
   colIndex: number,
 ) {
   const { rows, cols, cells, colWidths, w } = shape.props;
+  const cellMerges = shape.props.cellMerges ?? [];
   if (cols <= 1) return;
   const idx = Math.max(0, Math.min(cols - 1, colIndex));
   const newCells: string[] = [];
@@ -842,9 +1096,83 @@ function removeColAt(
       cells: newCells,
       colWidths: newColWidths,
       w: w - removed,
+      cellMerges: shiftMergesForRemoveCol(cellMerges, idx),
     },
     'table-remove-col',
   );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 셀 병합 / 해제
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 선택 범위를 하나의 병합 셀로 합침.
+ *   - 좌상단 셀의 텍스트는 보존, 나머지 셀들의 텍스트는 비움 (Excel 와 동일 동작).
+ *   - 기존에 범위와 겹치는 merge 들은 제거 (새 병합으로 대체).
+ */
+function mergeCells(
+  editor: ReturnType<typeof useEditor>,
+  shape: TableShape,
+  range: CellRange,
+) {
+  const { cols, cells } = shape.props;
+  const cellMerges = shape.props.cellMerges ?? [];
+  const n = normalizeRange(range);
+  const rowspan = n.maxRow - n.minRow + 1;
+  const colspan = n.maxCol - n.minCol + 1;
+  if (rowspan <= 1 && colspan <= 1) return;
+
+  // 범위 안 셀 텍스트 비우기 (좌상단 제외).
+  const newCells = cells.slice();
+  for (let r = n.minRow; r <= n.maxRow; r++) {
+    for (let c = n.minCol; c <= n.maxCol; c++) {
+      if (r === n.minRow && c === n.minCol) continue;
+      newCells[r * cols + c] = '';
+    }
+  }
+  // 새 범위와 겹치는 기존 merge 제거.
+  const filtered = cellMerges.filter((m) => {
+    const overlap =
+      m.row <= n.maxRow &&
+      m.row + m.rowspan - 1 >= n.minRow &&
+      m.col <= n.maxCol &&
+      m.col + m.colspan - 1 >= n.minCol;
+    return !overlap;
+  });
+  const newMerge: CellMerge = {
+    row: n.minRow,
+    col: n.minCol,
+    rowspan,
+    colspan,
+  };
+  updateTableShape(
+    editor,
+    shape,
+    {
+      cells: newCells,
+      cellMerges: [...filtered, newMerge],
+    },
+    'table-merge-cells',
+  );
+}
+
+function unmergeCells(
+  editor: ReturnType<typeof useEditor>,
+  shape: TableShape,
+  merge: CellMerge,
+) {
+  const cellMerges = shape.props.cellMerges ?? [];
+  const next = cellMerges.filter(
+    (m) =>
+      !(
+        m.row === merge.row &&
+        m.col === merge.col &&
+        m.rowspan === merge.rowspan &&
+        m.colspan === merge.colspan
+      ),
+  );
+  updateTableShape(editor, shape, { cellMerges: next }, 'table-unmerge-cells');
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
