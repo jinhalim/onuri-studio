@@ -78,8 +78,35 @@ export function parseGdriveUrl(url: string): ParsedGdriveUrl | null {
   return null;
 }
 
-/** mime type 으로부터 embed URL 재계산 — 저장된 shape 다시 열 때 사용. */
-export function buildGdriveEmbedUrl(fileId: string, mimeType: string): string {
+/**
+ * mime type 으로부터 embed URL 재계산.
+ * viewOnly=true 면 항상 /preview (편집 UI 자체가 안 보임 — 읽기 모드 사용자용).
+ *
+ * 보안 측면:
+ *   - Drive-level 권한 (anyone-with-link reader) 이 1차 방어선
+ *   - viewOnly=true 인 UI 가 2차 방어선 (편집 UI 자체 차단)
+ *   - 두 layer 모두 적용해서 깊이 방어 (defense in depth)
+ */
+export function buildGdriveEmbedUrl(
+  fileId: string,
+  mimeType: string,
+  viewOnly = false,
+): string {
+  if (viewOnly) {
+    // Sheets / Docs / Slides 의 /preview URL — read-only viewer.
+    // Drive 의 일반 파일은 본래도 /preview.
+    if (mimeType === 'application/vnd.google-apps.spreadsheet') {
+      return `https://docs.google.com/spreadsheets/d/${fileId}/preview`;
+    }
+    if (mimeType === 'application/vnd.google-apps.document') {
+      return `https://docs.google.com/document/d/${fileId}/preview`;
+    }
+    if (mimeType === 'application/vnd.google-apps.presentation') {
+      return `https://docs.google.com/presentation/d/${fileId}/preview`;
+    }
+    return `https://drive.google.com/file/d/${fileId}/preview`;
+  }
+  // edit mode — owner / 권한자 한정. Drive 가 자체 권한 검증해서 실제 편집 가능 여부 결정.
   if (mimeType === 'application/vnd.google-apps.spreadsheet') {
     return `https://docs.google.com/spreadsheets/d/${fileId}/edit?usp=sharing&rm=embedded`;
   }

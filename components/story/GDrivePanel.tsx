@@ -1,9 +1,11 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
-import { X, ExternalLink, AlertTriangle, GripVertical } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
+import { X, ExternalLink, AlertTriangle, GripVertical, RefreshCw } from 'lucide-react';
 import type { GDriveFileShape } from '@/components/canvas/gdriveShapeUtil';
-import { labelForGdriveMime } from '@/lib/usecases/parse-gdrive-url';
+import { buildGdriveEmbedUrl, labelForGdriveMime } from '@/lib/usecases/parse-gdrive-url';
+import { refreshGdriveFileName } from '@/lib/client/gdrive-attach-flow';
+import type { Editor } from '@/lib/editor';
 import { cn } from '@/lib/utils';
 
 // D-018 Phase 8a — 캔버스 우측 split-screen iframe 패널.
@@ -21,6 +23,14 @@ interface GDrivePanelProps {
   minWidth?: number;
   maxWidth?: number;
   onClose: () => void;
+  /**
+   * 편집 권한. false 면 Sheets/Docs/Slides 의 /edit URL 대신 /preview 로 강제 →
+   * 읽기 모드로 들어온 사용자가 iframe 안 편집 UI 자체를 못 보게 한다 (defense in depth).
+   * Drive 자체 권한 (anyone-with-link reader) 이 1차 방어선, 본 prop 이 2차.
+   */
+  canEdit: boolean;
+  /** tldraw Editor 인스턴스. <Tldraw> 바깥이라 useEditor() 못 써서 prop 으로 받음. */
+  editor: Editor | null;
   className?: string;
 }
 
@@ -31,48 +41,89 @@ export function GDrivePanel({
   minWidth = 280,
   maxWidth = 1000,
   onClose,
+  canEdit,
+  editor,
   className,
 }: GDrivePanelProps) {
-  const { fileName, mimeType, embedUrl, imported, fileId } = shape.props;
+  const { fileName, mimeType, imported, fileId } = shape.props;
   const label = labelForGdriveMime(mimeType);
+  // shape.props.embedUrl 은 첨부 시점에 결정된 URL (보통 /edit). canEdit 기반 재계산해서
+  // 읽기 모드 사용자에게는 항상 /preview 가 가도록 한다.
+  const embedUrl = fileId ? buildGdriveEmbedUrl(fileId, mimeType, !canEdit) : shape.props.embedUrl;
+  // 새 탭 열기는 항상 원본 (편집 모드) — 그 사용자에게 Drive 권한이 있다면 거기서 편집 가능.
+  // Drive 가 자체 권한 검증해서 차단해주므로 안전.
+  const externalUrl = fileId ? buildGdriveEmbedUrl(fileId, mimeType, false).replace('?usp=sharing&rm=embedded', '') : shape.props.embedUrl.replace('?usp=sharing&rm=embedded', '');
 
-  // 드래그 시작 시점의 pointer X + width 를 capture, document-level pointermove/up 으로
-  // 핸들 밖에 마우스 나가도 안정적으로 추적. iframe 위로 마우스 가도 capture 됨.
+  // 드래그 상태 — iframe 위에 transparent overlay 를 띄워서 iframe 이 pointer 이벤트를
+  // 가로채지 못하게 한다. iframe 이 pointerup 을 흡수하면 마우스 떼도 드래그가 안 끝남 (버그).
+  const [isDragging, setIsDragging] = useState(false);
   const dragStateRef = useRef<{
     startX: number;
     startWidth: number;
   } | null>(null);
+
+  // Drive → 캔버스 이름 sync. iframe 안에서 사용자가 Sheets/Docs 의 title bar 로 이름
+  // 바꿔도 캔버스 라벨에 자동 반영 안 됨 (Google 이 push 안 줌) → 본 버튼으로 수동 sync.
+  const [refreshState, setRefreshState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [refreshHint, setRefreshHint] = useState<string | null>(null);
+  const handleRefreshName = useCallback(async () => {
+    if (!fileId || imported || !editor) return;
+    setRefreshState('loading');
+    setRefreshHint(null);
+    const res = await refreshGdriveFileName(fileId);
+    if (res.ok) {
+      if (res.name === shape.props.fileName) {
+        setRefreshState('done');
+        setRefreshHint('Drive 와 동일');
+      } else {
+        editor.updateShapes([
+          {
+            id: shape.id,
+            type: shape.type,
+            props: { ...shape.props, fileName: res.name },
+          },
+        ] as unknown as Parameters<typeof editor.updateShapes>[0]);
+        setRefreshState('done');
+        setRefreshHint(`'${res.name}' 로 업데이트`);
+      }
+    } else {
+      setRefreshState('error');
+      setRefreshHint(res.message);
+    }
+    // 2초 뒤 hint 사라짐
+    window.setTimeout(() => {
+      setRefreshState('idle');
+      setRefreshHint(null);
+    }, 2500);
+  }, [editor, fileId, imported, shape.id, shape.type, shape.props]);
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.preventDefault();
       e.stopPropagation();
       dragStateRef.current = { startX: e.clientX, startWidth: width };
-
-      const handleMove = (ev: PointerEvent) => {
-        const s = dragStateRef.current;
-        if (!s) return;
-        // 패널이 캔버스 오른쪽에 있으니 마우스 왼쪽으로 가면 폭 증가, 오른쪽 가면 감소.
-        const next = s.startWidth - (ev.clientX - s.startX);
-        onWidthChange(Math.max(minWidth, Math.min(maxWidth, next)));
-      };
-      const handleUp = () => {
-        dragStateRef.current = null;
-        document.removeEventListener('pointermove', handleMove);
-        document.removeEventListener('pointerup', handleUp);
-        document.removeEventListener('pointercancel', handleUp);
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
-      };
-      document.addEventListener('pointermove', handleMove);
-      document.addEventListener('pointerup', handleUp);
-      document.addEventListener('pointercancel', handleUp);
-      // 드래그 중 본문 텍스트 선택 + iframe 안 hover 효과 차단
-      document.body.style.userSelect = 'none';
-      document.body.style.cursor = 'ew-resize';
+      setIsDragging(true);
     },
-    [width, minWidth, maxWidth, onWidthChange],
+    [width],
   );
+
+  // overlay 의 pointermove — drag 중에만 활성. width 계산만 하고 cleanup 안 함.
+  const onOverlayMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const s = dragStateRef.current;
+      if (!s) return;
+      // 패널이 캔버스 오른쪽 → 마우스 왼쪽 이동 = 폭 증가, 오른쪽 = 감소.
+      const next = s.startWidth - (e.clientX - s.startX);
+      onWidthChange(Math.max(minWidth, Math.min(maxWidth, next)));
+    },
+    [minWidth, maxWidth, onWidthChange],
+  );
+
+  // overlay 의 pointerup / cancel — drag 종료.
+  const onOverlayUp = useCallback(() => {
+    dragStateRef.current = null;
+    setIsDragging(false);
+  }, []);
 
   return (
     <aside
@@ -106,6 +157,19 @@ export function GDrivePanel({
           aria-hidden
         />
       </div>
+
+      {/* 드래그 중 fullscreen overlay — iframe 위를 덮어서 pointer 이벤트 가로채기 차단.
+          iframe 이 pointerup 을 흡수하는 버그 해결. drag 중에만 mount. */}
+      {isDragging && (
+        <div
+          onPointerMove={onOverlayMove}
+          onPointerUp={onOverlayUp}
+          onPointerCancel={onOverlayUp}
+          className="fixed inset-0 z-[300]"
+          style={{ cursor: 'ew-resize', userSelect: 'none', touchAction: 'none' }}
+          aria-hidden
+        />
+      )}
       {/* 헤더 */}
       <header className="flex items-center gap-2 border-b border-divider bg-brand-surface/50 px-3 py-2">
         <span className="flex-shrink-0 rounded-sm bg-live/15 px-2 py-0.5 text-[10px] font-semibold text-live">
@@ -115,8 +179,31 @@ export function GDrivePanel({
           {fileName}
         </h2>
         {!imported && fileId && (
+          <button
+            type="button"
+            onClick={handleRefreshName}
+            disabled={refreshState === 'loading'}
+            title={
+              refreshHint
+                ? refreshHint
+                : 'Drive 에서 현재 이름 다시 가져오기 (iframe 안에서 rename 한 경우)'
+            }
+            aria-label="Drive 에서 이름 다시 가져오기"
+            className={cn(
+              'rounded-sm p-1 hover:bg-brand-bezel',
+              refreshState === 'error' ? 'text-rec' : 'text-fg-muted hover:text-fg',
+              refreshState === 'done' && 'text-live',
+            )}
+          >
+            <RefreshCw
+              size={14}
+              className={refreshState === 'loading' ? 'animate-spin' : undefined}
+            />
+          </button>
+        )}
+        {!imported && fileId && (
           <a
-            href={embedUrl.replace('?usp=sharing&rm=embedded', '')}
+            href={externalUrl}
             target="_blank"
             rel="noreferrer noopener"
             title="Drive 에서 새 탭으로 열기"
@@ -154,7 +241,10 @@ export function GDrivePanel({
             title={fileName}
             className="h-full w-full border-0"
             allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+            // sandbox 확장: allow-presentation (Cast/Chromecast 동작 위해 필요 — 없으면
+            // PresentationRequest sandboxed 콘솔 에러). allow-modals (Drive 의 dialog).
+            // allow-downloads (파일 받기). 모두 Google 의 trusted iframe 이라 안전.
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-modals allow-downloads"
             referrerPolicy="no-referrer-when-downgrade"
           />
         )}

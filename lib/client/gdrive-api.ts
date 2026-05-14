@@ -33,16 +33,34 @@ export class GDriveApiError extends Error {
 }
 
 function classifyError(err: unknown): GDriveError {
-  const e = err as { status?: number; result?: { error?: { message?: string; errors?: Array<{ reason?: string }> } } };
+  const e = err as {
+    status?: number;
+    result?: { error?: { message?: string; errors?: Array<{ reason?: string }> } };
+  };
   const status = e?.status;
   const reason = e?.result?.error?.errors?.[0]?.reason;
-  if (status === 401) return 'unauthorized';
+  if (status === 401 || status === 403) return 'unauthorized';
   if (status === 404) return 'not-found';
   if (reason === 'storageQuotaExceeded') return 'storage-quota';
   if (reason === 'userRateLimitExceeded' || reason === 'rateLimitExceeded' || status === 429) {
     return 'rate-limit';
   }
   return 'unknown';
+}
+
+/** Drive 호출 시 어디서 실패했는지 명확히 보이게 — 디버깅용 상세 로그. */
+function logDriveError(context: string, err: unknown): void {
+  const e = err as {
+    status?: number;
+    result?: { error?: { message?: string; errors?: Array<{ reason?: string; message?: string }> } };
+    message?: string;
+  };
+  console.error(`[Drive ${context}] 실패:`, {
+    status: e?.status,
+    reason: e?.result?.error?.errors?.[0]?.reason,
+    message: e?.result?.error?.message ?? e?.message,
+    full: err,
+  });
 }
 
 async function ensureGapi(accessToken: string): Promise<void> {
@@ -78,6 +96,7 @@ export async function findFolderByName(
     });
     return res.result.files?.[0] ?? null;
   } catch (err) {
+    logDriveError(`findFolderByName(${name}, parent=${parentId})`, err);
     throw new GDriveApiError(classifyError(err), `폴더 검색 실패: ${name}`);
   }
 }
@@ -100,6 +119,7 @@ export async function createFolder(
     });
     return res.result;
   } catch (err) {
+    logDriveError(`createFolder(${name}, parent=${parentId})`, err);
     throw new GDriveApiError(classifyError(err), `폴더 생성 실패: ${name}`);
   }
 }
@@ -133,7 +153,50 @@ export async function renameFolder(
     });
     return res.result;
   } catch (err) {
+    logDriveError(`renameFolder(${folderId} → ${newName})`, err);
     throw new GDriveApiError(classifyError(err), `폴더 이름 변경 실패: ${newName}`);
+  }
+}
+
+/**
+ * 일반 파일 이름 변경. files.update 는 폴더/파일 구분 없이 동일 호출.
+ * 본 헬퍼는 호출자 의도를 분명히 하기 위해 별도 함수.
+ * 권한 없을 시 (예: anyone-with-link reader 만 받은 다른 user) 403 → unauthorized.
+ */
+export async function renameDriveFile(
+  accessToken: string,
+  fileId: string,
+  newName: string,
+): Promise<GapiDriveFile> {
+  await ensureGapi(accessToken);
+  try {
+    const res = await window.gapi.client.drive.files.update({
+      fileId,
+      resource: { name: newName },
+      fields: 'id, name',
+    });
+    return res.result;
+  } catch (err) {
+    logDriveError(`renameDriveFile(${fileId} → ${newName})`, err);
+    throw new GDriveApiError(classifyError(err), `파일 이름 변경 실패: ${newName}`);
+  }
+}
+
+/** Drive 의 현재 파일명 조회. iframe 안에서 이름 바뀐 거 캔버스로 가져올 때 사용. */
+export async function getDriveFileName(
+  accessToken: string,
+  fileId: string,
+): Promise<string> {
+  await ensureGapi(accessToken);
+  try {
+    const res = await window.gapi.client.drive.files.get({
+      fileId,
+      fields: 'name',
+    });
+    return res.result.name;
+  } catch (err) {
+    logDriveError(`getDriveFileName(${fileId})`, err);
+    throw new GDriveApiError(classifyError(err), 'Drive 파일명 조회 실패');
   }
 }
 
@@ -161,6 +224,7 @@ export async function createShortcut(
     });
     return res.result;
   } catch (err) {
+    logDriveError(`createShortcut(target=${targetFileId}, parent=${parentFolderId})`, err);
     throw new GDriveApiError(classifyError(err), 'Shortcut 생성 실패');
   }
 }
@@ -197,10 +261,39 @@ export async function shareAnyoneWithLink(
       fields: 'id',
     });
   } catch (err) {
-    // 권한 이미 있으면 무시
     const code = classifyError(err);
     if (code === 'rate-limit') throw new GDriveApiError(code, '권한 부여 rate limit');
-    // 그 외 (이미 share 됨 등) 는 graceful
-    console.warn('[shareAnyoneWithLink] graceful:', err);
+    // 403/404/이미 share 됨 등은 graceful (사용자 첨부 흐름은 막지 않음).
+    // 다만 디버깅 위해 상세 정보 로그.
+    logDriveError(`shareAnyoneWithLink(${fileId}) [graceful]`, err);
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 디버깅 helper
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 현재 token 에 부여된 scope 확인. Drive 권한 누락 진단용.
+ * Google 의 tokeninfo 엔드포인트 호출 → granted scopes 출력.
+ */
+export async function debugTokenScopes(accessToken: string): Promise<string[]> {
+  try {
+    const res = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`,
+    );
+    if (!res.ok) {
+      console.error('[debugTokenScopes] tokeninfo 실패:', res.status);
+      return [];
+    }
+    const data = (await res.json()) as { scope?: string };
+    const scopes = data.scope?.split(' ') ?? [];
+    console.log('[debugTokenScopes] 현재 token 의 scope:', scopes);
+    const hasDriveFile = scopes.some((s) => s.endsWith('/auth/drive.file'));
+    console.log(`[debugTokenScopes] drive.file 포함: ${hasDriveFile ? 'YES ✓' : 'NO ✗'}`);
+    return scopes;
+  } catch (err) {
+    console.error('[debugTokenScopes] 실패:', err);
+    return [];
   }
 }

@@ -50,6 +50,20 @@ function hexWithAlpha(hex: string, alpha01: number): string {
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
+// 색을 흰색과 mix 해서 연하게. amount=0 → 원본, 1 → 흰색.
+// Frame 안쪽 fill 처럼 "은은한 tint" 효과 낼 때 사용.
+function lightenHex(hex: string, amount01: number): string {
+  const m = hex.replace('#', '');
+  const r = parseInt(m.length === 3 ? m[0]! + m[0]! : m.slice(0, 2), 16);
+  const g = parseInt(m.length === 3 ? m[1]! + m[1]! : m.slice(2, 4), 16);
+  const b = parseInt(m.length === 3 ? m[2]! + m[2]! : m.slice(4, 6), 16);
+  const a = Math.max(0, Math.min(1, amount01));
+  const lr = Math.round(r + (255 - r) * a);
+  const lg = Math.round(g + (255 - g) * a);
+  const lb = Math.round(b + (255 - b) * a);
+  return `#${lr.toString(16).padStart(2, '0')}${lg.toString(16).padStart(2, '0')}${lb.toString(16).padStart(2, '0')}`;
+}
+
 // 각 shape util 별 override.
 // 키 이름은 해당 shape 의 *DisplayValues 인터페이스에 정의된 것 사용 (예: GeoShape → strokeColor/fillColor).
 //
@@ -147,17 +161,21 @@ const CustomHighlightShapeUtil = HighlightShapeUtil.configure({
 });
 
 // Frame: tldraw v5 기본은 색상 prop 없음 → 표준 팔레트 안 보임.
-// customColor 만 적용 가능. 색은 frame 의 외곽선 + 라벨 색에 반영.
+// customColor 만 적용 가능. 색은 frame 의 외곽선 + 안쪽 fill (50% 연하게) + 헤딩 글자에 반영.
+// FrameShapeUtilDisplayValues key (tldraw 5.0.0 소스 기준):
+//   - fillColor: 안쪽 배경
+//   - strokeColor: 테두리
+//   - headingTextColor: 상단 라벨 텍스트
+//   - headingFillColor / headingStrokeColor: 헤딩 바 배경/테두리 (negativeSpace default 유지)
 const CustomFrameShapeUtil = FrameShapeUtil.configure({
   getCustomDisplayValues: (_editor, shape) => {
     const hex = getCustomColor(shape);
     if (!hex) return {};
     return {
-      // frame display values 의 정확한 key 는 tldraw 내부 타입을 따름.
-      // 일반적 strokeColor / labelColor 키가 작동. 키가 빗나가면 효과만 미적용
-      // (런타임 에러 X — getDisplayValues 가 부분 머지).
       strokeColor: hex,
-      labelColor: hex,
+      // 안쪽 fill 은 50% 연한 tint — 사용자가 명시적으로 picker 로 정한 색의 약한 채움.
+      fillColor: lightenHex(hex, 0.5),
+      headingTextColor: hex,
     };
   },
 });

@@ -38,6 +38,10 @@ const schema = z.object({
   // Phase 8b: Google Picker SDK 용 API key. NEXT_PUBLIC_* 라 client 번들 포함.
   // Picker API + Drive API 만 허용으로 Google Cloud Console 에서 제한 권장.
   NEXT_PUBLIC_GOOGLE_API_KEY: z.string().optional(),
+  // Google Cloud Project Number — Picker SDK 의 setAppId 에 필수.
+  // drive.file scope 로 선택한 파일에 후속 Drive API 접근하려면 이 ID 가 있어야 함.
+  // GOOGLE_CLIENT_ID 의 prefix 숫자 (예: "648962576577-...." 의 "648962576577").
+  NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER: z.string().optional(),
 
   // ─── 이메일 매직 링크 (Phase 9) ───
   RESEND_API_KEY: z.string().optional(),
@@ -72,6 +76,7 @@ export const env = schema.parse(
     GOOGLE_WORKSPACE_SCOPES: process.env.GOOGLE_WORKSPACE_SCOPES,
     INTEGRATION_TOKEN_ENCRYPTION_KEY: process.env.INTEGRATION_TOKEN_ENCRYPTION_KEY,
     NEXT_PUBLIC_GOOGLE_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_API_KEY,
+    NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER: process.env.NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     EMAIL_FROM: process.env.EMAIL_FROM,
   }),

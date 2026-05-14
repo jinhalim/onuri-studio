@@ -76,9 +76,6 @@ export function StoryWorkspace({
   // 들어가는 circular dependency 회피용 ref. 아래 useStoryRealtime 호출 후 채워진다.
   const broadcastRef = useRef<((changes: Omit<SyncPayload, 'fromUserId'>) => void) | null>(null);
   const [isDrawingLocal, setIsDrawingLocal] = useState(false);
-  // D-018 PoC: 사용자가 명시적으로 패널을 닫으면 같은 shape 재선택해도 자동 안 열림.
-  // 다른 gdrive shape 선택 시엔 다시 열림. shape.id 단위로 "닫힘 상태" 추적.
-  const [closedPanelShapeIds, setClosedPanelShapeIds] = useState<Set<string>>(() => new Set());
   // 패널 너비 — 사용자가 좌측 핸들 드래그로 조정. 세션 한정 (영속화 안 함).
   const [panelWidth, setPanelWidth] = useState(480);
   const [laserShareMode, setLaserShareMode] = useState<LaserShareMode>('private');
@@ -351,17 +348,20 @@ export function StoryWorkspace({
     [editor],
   );
 
-  // 패널 표시 여부: 선택된 gdrive shape 있고, 사용자가 명시적으로 닫은 적 없으면 표시.
-  const panelOpen =
-    selectedGDriveShape !== null && !closedPanelShapeIds.has(selectedGDriveShape.id);
+  // 패널 표시 여부 = 선택된 gdrive shape 있으면 자동 표시.
+  const panelOpen = selectedGDriveShape !== null;
 
+  // 패널 닫기 = 그 gdrive shape 만 deselect.
+  // selectedGDriveShape 가 null 이 되면서 panelOpen 도 자연스럽게 false.
+  // 다음에 사용자가 같은 아이콘 클릭하면 다시 select 되고 패널 자동 open — 직관적.
+  // (다른 shape 선택 상태는 그대로 유지.)
   const handleClosePanel = () => {
-    if (!selectedGDriveShape) return;
-    setClosedPanelShapeIds((prev) => {
-      const next = new Set(prev);
-      next.add(selectedGDriveShape.id);
-      return next;
-    });
+    const ed = editorRef.current;
+    if (!ed || !selectedGDriveShape) return;
+    const remaining = ed
+      .getSelectedShapeIds()
+      .filter((id) => id !== selectedGDriveShape.id);
+    ed.setSelectedShapes(remaining);
   };
 
   // D-017: 정원 초과 시 캔버스 대신 안내 페이지 표시. 채널 진입 즉시 untrack 되고
@@ -483,6 +483,8 @@ export function StoryWorkspace({
             minWidth={320}
             maxWidth={Math.max(400, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 300)}
             onClose={handleClosePanel}
+            canEdit={canEdit}
+            editor={editor}
           />
         )}
       </section>

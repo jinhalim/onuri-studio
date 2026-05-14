@@ -65,6 +65,10 @@ export interface GapiDriveApi {
       removeParents?: string;
       fields?: string;
     }) => Promise<GapiResponse<GapiDriveFile>>;
+    get: (params: {
+      fileId: string;
+      fields?: string;
+    }) => Promise<GapiResponse<GapiDriveFile>>;
     delete: (params: { fileId: string }) => Promise<GapiResponse<unknown>>;
   };
   permissions: {
@@ -84,6 +88,7 @@ export interface GoogleGlobal {
   picker: {
     PickerBuilder: new () => GooglePickerBuilder;
     DocsView: new (viewId?: string) => GoogleDocsView;
+    DocsUploadView: new () => GoogleDocsUploadView;
     ViewId: Record<string, string>;
     Action: Record<string, string>;
     Response: Record<string, string>;
@@ -91,6 +96,10 @@ export interface GoogleGlobal {
     Feature: Record<string, string>;
   };
 }
+
+// 업로드 view — 별도 탭으로 추가. 옵션 chain 메서드는 우리 use case 에선 필요 없음.
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface GoogleDocsUploadView {}
 
 export interface GoogleDocsView {
   setIncludeFolders: (b: boolean) => GoogleDocsView;
@@ -104,7 +113,7 @@ export interface GooglePickerBuilder {
   setOAuthToken: (token: string) => GooglePickerBuilder;
   setDeveloperKey: (key: string) => GooglePickerBuilder;
   setAppId: (id: string) => GooglePickerBuilder;
-  addView: (view: GoogleDocsView) => GooglePickerBuilder;
+  addView: (view: GoogleDocsView | GoogleDocsUploadView) => GooglePickerBuilder;
   setCallback: (cb: (data: GooglePickerResponse) => void) => GooglePickerBuilder;
   setOrigin: (origin: string) => GooglePickerBuilder;
   enableFeature: (feature: string) => GooglePickerBuilder;

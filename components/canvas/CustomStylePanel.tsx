@@ -68,6 +68,19 @@ function usePendingCustomColor(): string | null {
 }
 
 export const CustomStylePanel = memo(function CustomStylePanel(props: TLUiStylePanelProps) {
+  const editor = useEditor();
+  // 선택이 전부 gdrive-file 이면 StylePanel 자체를 숨김. 색상/크기/투명도 모두 의미 없음.
+  // (rotate handle 도 hideRotateHandle()=true 라 안 보이고, resize 도 canResize()=false.)
+  const onlyGDriveSelected = useValue<boolean>(
+    'only-gdrive-selected',
+    () => {
+      const shapes = editor.getSelectedShapes();
+      if (shapes.length === 0) return false;
+      return shapes.every((s) => (s.type as string) === 'gdrive-file');
+    },
+    [editor],
+  );
+
   // 위치 오프셋 (px). tldraw 기본 위치(top-right) 를 0,0 origin 으로 삼고 translate.
   // 사용자 요청: 세션마다 기본 위치로 리셋 → useState 만 사용, persist 없음.
   const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -117,6 +130,9 @@ export const CustomStylePanel = memo(function CustomStylePanel(props: TLUiStyleP
     dragStartRef.current = null;
     setDragging(false);
   }, []);
+
+  // gdrive-file 만 선택된 상태면 panel 통째로 숨김.
+  if (onlyGDriveSelected) return null;
 
   return (
     <div

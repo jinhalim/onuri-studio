@@ -1,13 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { FileSpreadsheet, FolderTree, Link2, X } from 'lucide-react';
+import { FileSpreadsheet, FolderTree, FolderOpen, Link2, X, ExternalLink } from 'lucide-react';
 import type { Editor } from '@/lib/editor';
 import {
   parseGdriveUrl,
   labelForGdriveMime,
 } from '@/lib/usecases/parse-gdrive-url';
-import { runDriveAttachFlow, type AttachedFileResult } from '@/lib/client/gdrive-attach-flow';
+import {
+  runDriveAttachFlow,
+  ensureGdriveFoldersOnly,
+  type AttachedFileResult,
+} from '@/lib/client/gdrive-attach-flow';
 import type { GDriveWorkspace } from '@/lib/domain/gdrive';
 import { GDriveWorkspaceMissingDialog } from './GDriveWorkspaceMissingDialog';
 import { cn } from '@/lib/utils';
@@ -37,6 +41,7 @@ type Stage =
   | { kind: 'url-modal' }
   | { kind: 'workspace-missing' }
   | { kind: 'picker-running' }
+  | { kind: 'open-folder-running' }
   | { kind: 'error'; message: string };
 
 export function GDriveAttachButton({
@@ -108,6 +113,41 @@ export function GDriveAttachButton({
     }
   };
 
+  // "Drive 폴더 열기" — ensure folders 후 새 탭으로 스토리 폴더 열기.
+  // Picker SDK 안에서 폴더/파일 생성이 불가능하므로 Drive 웹 사이트에서 직접 생성하라는 흐름.
+  const runOpenFolder = async () => {
+    if (!workspace) {
+      setStage({ kind: 'workspace-missing' });
+      return;
+    }
+    setStage({ kind: 'open-folder-running' });
+    try {
+      const res = await ensureGdriveFoldersOnly({
+        workspace,
+        channelId,
+        channelName,
+        storyId,
+        storyTitle,
+      });
+      if (!res.ok || !res.storyFolderId) {
+        setStage({ kind: 'error', message: res.error ?? '폴더 준비 실패' });
+        return;
+      }
+      // 새 탭으로 Drive 의 스토리 폴더 열기
+      window.open(
+        `https://drive.google.com/drive/folders/${res.storyFolderId}`,
+        '_blank',
+        'noopener,noreferrer',
+      );
+      setStage({ kind: 'idle' });
+    } catch (err) {
+      setStage({
+        kind: 'error',
+        message: err instanceof Error ? err.message : '알 수 없는 오류',
+      });
+    }
+  };
+
   return (
     <>
       <button
@@ -127,6 +167,7 @@ export function GDriveAttachButton({
 
       {stage.kind === 'choice' && (
         <ChoiceDialog
+          onOpenFolder={runOpenFolder}
           onPicker={runPicker}
           onUrlMode={() => setStage({ kind: 'url-modal' })}
           onClose={close}
@@ -144,7 +185,9 @@ export function GDriveAttachButton({
         />
       )}
 
-      {stage.kind === 'picker-running' && <PickerRunningOverlay />}
+      {stage.kind === 'picker-running' && <RunningOverlay label="Picker 준비 중…" hint="폴더 확인 / Picker 띄움 / Shortcut 생성을 진행하고 있어요." />}
+
+      {stage.kind === 'open-folder-running' && <RunningOverlay label="Drive 폴더 준비 중…" hint="폴더 구조 확인 후 새 탭으로 이동합니다." />}
 
       {stage.kind === 'error' && (
         <ErrorDialog message={stage.message} onClose={close} />
@@ -158,10 +201,12 @@ export function GDriveAttachButton({
 // ──────────────────────────────────────────────────────────────────────────────
 
 function ChoiceDialog({
+  onOpenFolder,
   onPicker,
   onUrlMode,
   onClose,
 }: {
+  onOpenFolder: () => void;
   onPicker: () => void;
   onUrlMode: () => void;
   onClose: () => void;
@@ -201,6 +246,30 @@ function ChoiceDialog({
         </p>
 
         <div className="flex flex-col gap-2">
+          {/* 1) Drive 폴더 열기 — 새 파일/폴더는 Drive 웹 사이트에서만 생성 가능.
+              이 옵션이 그 위치로 직접 보내는 link. 사용자가 거기서 파일 만든 후
+              아래 Picker 옵션으로 와서 첨부. */}
+          <button
+            type="button"
+            onClick={onOpenFolder}
+            className={cn(
+              'flex flex-col items-start gap-1 rounded-md border border-live/40 bg-live/10 p-3 text-left',
+              'hover:border-live/60 hover:bg-live/15 transition-colors',
+            )}
+          >
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-fg">
+              <FolderOpen size={14} className="text-live" />
+              Drive 폴더 열기 (새 파일 만들기)
+              <ExternalLink size={11} className="text-fg-muted" />
+            </span>
+            <span className="text-[11px] text-fg-muted">
+              스토리의 Drive 폴더를 새 탭으로 열어요. 거기서 새 문서/시트/슬라이드를
+              만든 후 다시 와서 아래 &ldquo;Picker&rdquo; 로 첨부하세요. (Picker SDK 자체엔 폴더/파일
+              생성 기능이 없어요)
+            </span>
+          </button>
+
+          {/* 2) Picker — 기존 파일 첨부 */}
           <button
             type="button"
             onClick={onPicker}
@@ -213,11 +282,12 @@ function ChoiceDialog({
               <FolderTree size={14} className="text-live" />내 Drive 에서 선택 (Picker)
             </span>
             <span className="text-[11px] text-fg-muted">
-              Google Picker 로 내 Drive 파일 탐색 + 첨부. 자동으로 폴더 구조 생성 + 협업자
-              viewer 권한 share.
+              Google Picker 로 내 Drive 파일 탐색 + 첨부. 폴더 구조 자동 생성 + 협업자
+              viewer 권한 share. 시작 위치는 스토리 폴더.
             </span>
           </button>
 
+          {/* 3) URL 직접 입력 */}
           <button
             type="button"
             onClick={onUrlMode}
@@ -407,7 +477,7 @@ function UrlPasteDialog({
 // Picker 진행 중 / Error 다이얼로그
 // ──────────────────────────────────────────────────────────────────────────────
 
-function PickerRunningOverlay() {
+function RunningOverlay({ label, hint }: { label: string; hint: string }) {
   return (
     <div
       role="status"
@@ -415,10 +485,8 @@ function PickerRunningOverlay() {
       className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50"
     >
       <div className="rounded-lg border border-divider bg-brand-bezel px-6 py-4 shadow-2xl">
-        <p className="text-sm text-fg">Drive 처리 중…</p>
-        <p className="mt-1 text-[11px] text-fg-muted">
-          폴더 확인 / Picker 띄움 / Shortcut 생성을 진행하고 있어요.
-        </p>
+        <p className="text-sm text-fg">{label}</p>
+        <p className="mt-1 text-[11px] text-fg-muted">{hint}</p>
       </div>
     </div>
   );

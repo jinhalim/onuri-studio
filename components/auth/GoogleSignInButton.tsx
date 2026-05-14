@@ -6,6 +6,12 @@ import { cn } from '@/lib/utils';
 
 // Google OAuth 시작 — supabase.auth.signInWithOAuth({ provider: 'google' }).
 // Supabase 가 Google 동의 화면으로 redirect, 동의 후 /auth/callback?code=XXX 로 돌아옴.
+//
+// D-018: drive.file scope 함께 요청 — 로그인 시 Drive 권한 동의 한 번에 받음.
+// 최신 Supabase Dashboard 에선 "Additional Scopes" UI 가 제거되어 코드에서 직접 전달.
+// access_type=offline + prompt=consent: refresh_token 보장 (session.provider_refresh_token).
+
+const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
 interface Props {
   /** 로그인 후 돌아갈 경로 — 보통 setup-nickname 가 처리 후 / 로 보냄. */
@@ -30,7 +36,17 @@ export function GoogleSignInButton({ redirectTo, className, label }: Props) {
       }`;
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: finalRedirectTo },
+        options: {
+          redirectTo: finalRedirectTo,
+          // 표준 'openid email profile' 외에 Drive 첨부용 scope 추가 (D-018).
+          scopes: `openid email profile ${GDRIVE_SCOPE}`,
+          // access_type=offline + prompt=consent → refresh_token 보장
+          // (이후 provider_refresh_token 로 토큰 갱신 가능)
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
       });
       if (oauthError) {
         setError(oauthError.message);
