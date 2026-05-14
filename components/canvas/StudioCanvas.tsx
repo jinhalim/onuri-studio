@@ -69,11 +69,10 @@ const LOCAL_LASER_COLOR = '#FF3D5A';
 const LASER_FADE_CLEANUP_MS = 3000;
 const LASER_ORPHAN_TIMEOUT_MS = 2000;
 
-// D-019: snapshot pre-migration — table shape 의 cellMerges 필드는 D-019 에서 추가됨.
-// 그 이전에 저장된 snapshot 의 table shape 은 cellMerges 가 undefined → 새 validator
-// (T.arrayOf required) 가 reject → loadSnapshot 이 store 손상시킴 → instance state 까지
-// 사라져 후속 render 에서 TypeError.
-// 본 함수가 parsed JSON 을 in-place 로 수정해서 누락된 cellMerges 를 [] 로 채움.
+// D-019: snapshot pre-migration — table shape 의 신규 필드 (cellMerges, cellStyles) 가
+// 저장 시점 이후 추가된 경우 schema 검증 실패 → loadSnapshot 이 store 손상시키고
+// instance state 까지 사라져 후속 render 에서 TypeError.
+// 본 함수가 parsed JSON 을 in-place 로 수정해서 누락된 필드를 채움.
 function migrateTableShapesInSnapshot(parsed: unknown): void {
   if (!parsed || typeof parsed !== 'object') return;
   const root = parsed as Record<string, unknown>;
@@ -86,11 +85,18 @@ function migrateTableShapesInSnapshot(parsed: unknown): void {
     (root.store as Record<string, unknown> | undefined);
   if (!store) return;
   for (const id of Object.keys(store)) {
-    const rec = store[id] as { type?: string; props?: Record<string, unknown> } | undefined;
+    const rec = store[id] as
+      | { type?: string; props?: Record<string, unknown> }
+      | undefined;
     if (!rec || rec.type !== 'table') continue;
     if (!rec.props) continue;
     if (!Array.isArray(rec.props.cellMerges)) {
       rec.props.cellMerges = [];
+    }
+    if (!Array.isArray(rec.props.cellStyles)) {
+      const rows = Number(rec.props.rows) || 0;
+      const cols = Number(rec.props.cols) || 0;
+      rec.props.cellStyles = Array.from({ length: rows * cols }, () => ({}));
     }
   }
 }

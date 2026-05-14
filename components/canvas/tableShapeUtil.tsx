@@ -49,6 +49,19 @@ export interface CellMerge {
   colspan: number;
 }
 
+/**
+ * 셀별 텍스트 스타일. 빈 객체 = 기본값 (md / sans / left).
+ * cells 배열과 동일 길이 (rows*cols), 같은 인덱스로 매핑.
+ */
+export type CellSize = 'sm' | 'md' | 'lg' | 'xl';
+export type CellFont = 'sans' | 'serif' | 'mono';
+export type CellAlign = 'left' | 'center' | 'right';
+export interface CellStyle {
+  size?: CellSize;
+  font?: CellFont;
+  align?: CellAlign;
+}
+
 export type TableShape = TLBaseShape<
   'table',
   {
@@ -61,6 +74,8 @@ export type TableShape = TLBaseShape<
     rowHeights: number[];
     /** 셀 병합 목록. 빈 배열이면 모든 셀이 개별. */
     cellMerges: CellMerge[];
+    /** 셀별 텍스트 스타일. cells 와 동일 길이 (rows*cols). 빈 객체 = 기본값. */
+    cellStyles: CellStyle[];
   }
 >;
 
@@ -88,6 +103,7 @@ export function propsForGrid(rows: number, cols: number): TableShape['props'] {
   const cells = Array.from({ length: r * c }, () => '');
   const colWidths = Array.from({ length: c }, () => DEFAULT_COL_W);
   const rowHeights = Array.from({ length: r }, () => DEFAULT_ROW_H);
+  const cellStyles = Array.from({ length: r * c }, () => ({}) as CellStyle);
   return {
     w: c * DEFAULT_COL_W,
     h: r * DEFAULT_ROW_H,
@@ -97,6 +113,7 @@ export function propsForGrid(rows: number, cols: number): TableShape['props'] {
     colWidths,
     rowHeights,
     cellMerges: [],
+    cellStyles,
   };
 }
 
@@ -118,6 +135,14 @@ export class TableShapeUtil extends BaseBoxShapeUtil<TableShape> {
         col: T.number,
         rowspan: T.number,
         colspan: T.number,
+      }),
+    ),
+    // 빈 객체도 valid — 각 필드는 optional (size/font/align 일부만 set 가능).
+    cellStyles: T.arrayOf(
+      T.object({
+        size: T.optional(T.literalEnum('sm', 'md', 'lg', 'xl')),
+        font: T.optional(T.literalEnum('sans', 'serif', 'mono')),
+        align: T.optional(T.literalEnum('left', 'center', 'right')),
       }),
     ),
   };
@@ -223,6 +248,78 @@ function isCovered(r: number, c: number, merges: CellMerge[]): boolean {
   return m !== null && !(m.row === r && m.col === c);
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// 셀 텍스트 스타일 — size / font / align 매핑
+// ──────────────────────────────────────────────────────────────────────────────
+
+const SIZE_PX: Record<CellSize, number> = {
+  sm: 11,
+  md: 13,
+  lg: 17,
+  xl: 22,
+};
+
+const FONT_FAMILY: Record<CellFont, string> = {
+  sans:
+    'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  serif: 'Georgia, "Times New Roman", serif',
+  mono: '"JetBrains Mono", Menlo, Consolas, monospace',
+};
+
+const ALIGN_CSS: Record<CellAlign, { textAlign: 'left' | 'center' | 'right'; justify: 'flex-start' | 'center' | 'flex-end' }> = {
+  left: { textAlign: 'left', justify: 'flex-start' },
+  center: { textAlign: 'center', justify: 'center' },
+  right: { textAlign: 'right', justify: 'flex-end' },
+};
+
+function getCellStyle(styles: CellStyle[], idx: number): Required<CellStyle> {
+  const s = styles[idx] ?? {};
+  return {
+    size: s.size ?? 'md',
+    font: s.font ?? 'sans',
+    align: s.align ?? 'left',
+  };
+}
+
+/** 범위 안 셀들의 indices 수집 (병합 영역 안 비-owner 셀도 포함). */
+function collectIndicesInRange(
+  range: CellRange,
+  cols: number,
+): number[] {
+  const n = normalizeRange(range);
+  const out: number[] = [];
+  for (let r = n.minRow; r <= n.maxRow; r++) {
+    for (let c = n.minCol; c <= n.maxCol; c++) {
+      out.push(r * cols + c);
+    }
+  }
+  return out;
+}
+
+/** 여러 셀의 동일 필드 값이 모두 같으면 그 값 반환, 다르면 'mixed' 반환. */
+function commonFieldValue<K extends keyof CellStyle>(
+  styles: CellStyle[],
+  indices: number[],
+  field: K,
+): NonNullable<CellStyle[K]> | 'mixed' | null {
+  const defaults: Record<keyof CellStyle, string> = {
+    size: 'md',
+    font: 'sans',
+    align: 'left',
+  };
+  const def = defaults[field];
+  let first: string | undefined;
+  for (const i of indices) {
+    const v = (styles[i]?.[field] as string | undefined) ?? def;
+    if (first === undefined) {
+      first = v;
+    } else if (first !== v) {
+      return 'mixed';
+    }
+  }
+  return (first as NonNullable<CellStyle[K]>) ?? null;
+}
+
 interface CellRange {
   startRow: number;
   startCol: number;
@@ -273,8 +370,15 @@ const DOUBLE_CLICK_MS = 400;
 function TableShapeBody({ shape }: { shape: TableShape }) {
   const editor = useEditor();
   const { w, h, rows, cols, cells, colWidths, rowHeights } = shape.props;
-  // cellMerges 는 props 에 없을 수도 있음 (이전 버전 호환) — fallback to [].
+  // cellMerges / cellStyles 는 props 에 없을 수도 있음 (이전 버전 호환) — fallback.
   const cellMerges = shape.props.cellMerges ?? [];
+  const cellStyles = shape.props.cellStyles ?? [];
+
+  const isSelected = useValue(
+    'table-selected',
+    () => editor.getSelectedShapeIds().includes(shape.id),
+    [editor, shape.id],
+  );
   // 'table' 이 tldraw closed TLShape union 에 없어서 cast — getCustomColor 는
   // shape.meta 만 읽으므로 type 무관하게 동작.
   const customHex = getCustomColor(shape as unknown as TLShape);
@@ -540,6 +644,11 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
             isEditing && editingCell?.row === r && editingCell?.col === c;
           const value = cells[idx] ?? '';
           const isInSelection = isInRange(r, c, cellRange);
+          // 셀별 텍스트 스타일.
+          const cellStyle = getCellStyle(cellStyles, idx);
+          const cellFontSize = SIZE_PX[cellStyle.size];
+          const cellFontFamily = FONT_FAMILY[cellStyle.font];
+          const cellAlign = ALIGN_CSS[cellStyle.align];
           // 마지막 열/행에 닿으면 표 외곽 border 가 처리 — 셀 내부 border 안 그림.
           const reachesRightEdge = c + colspan >= cols;
           const reachesBottomEdge = r + rowspan >= rows;
@@ -568,8 +677,9 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
                 padding: '4px 6px',
                 display: 'flex',
                 alignItems: 'flex-start',
-                justifyContent: 'flex-start',
-                fontSize: 12,
+                justifyContent: cellAlign.justify,
+                fontSize: cellFontSize,
+                fontFamily: cellFontFamily,
                 lineHeight: 1.3,
                 background: cellBg,
                 cursor: 'text',
@@ -577,6 +687,7 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
               }}
               title={value || '더블클릭해서 편집 · 우클릭해서 메뉴'}
             >
+              {/* 표시 텍스트 / 편집 textarea */}
               {isThisEditing ? (
                 <textarea
                   ref={inputRef}
@@ -611,8 +722,9 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
                     outline: 'none',
                     resize: 'none',
                     background: 'transparent',
-                    fontSize: 12,
-                    fontFamily: 'inherit',
+                    fontSize: cellFontSize,
+                    fontFamily: cellFontFamily,
+                    textAlign: cellAlign.textAlign,
                     color: '#1f1f2a',
                     padding: 0,
                     userSelect: 'auto',
@@ -687,6 +799,37 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
         );
       })}
 
+      {/* 셀 스타일 mini-toolbar — 표 선택 상태 + 셀 범위 있을 때 표 위쪽에 노출.
+          편집 중이면 그 셀에, 범위 선택만 돼있으면 범위 안 모든 셀에 적용. */}
+      {isSelected && cellRange && (
+        <CellStyleToolbar
+          styles={cellStyles}
+          targetIndices={
+            isEditing && editingCell
+              ? [cellIdx(editingCell.row, editingCell.col, cols)]
+              : collectIndicesInRange(cellRange, cols)
+          }
+          onSetStyle={(field, value) => {
+            const targetIndices =
+              isEditing && editingCell
+                ? [cellIdx(editingCell.row, editingCell.col, cols)]
+                : collectIndicesInRange(cellRange, cols);
+            const newStyles = cellStyles.slice();
+            // 빈 영역 보강 (예전 데이터 호환).
+            while (newStyles.length < rows * cols) newStyles.push({});
+            for (const idx of targetIndices) {
+              newStyles[idx] = { ...(newStyles[idx] ?? {}), [field]: value };
+            }
+            updateTableShape(
+              editor,
+              shape,
+              { cellStyles: newStyles },
+              'table-cell-style',
+            );
+          }}
+        />
+      )}
+
       {/* 우클릭 컨텍스트 메뉴 — 행/열 추가·삭제 + 셀 병합/해제. 외부 클릭 시 자동 닫힘. */}
       {contextMenu && !isEditing && (
         <ContextMenu
@@ -745,6 +888,219 @@ function TableShapeBody({ shape }: { shape: TableShape }) {
         />
       )}
     </HTMLContainer>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 셀 스타일 mini-toolbar — 표 위쪽에 띄움. size / font / align 셀별 적용.
+// ──────────────────────────────────────────────────────────────────────────────
+
+interface CellStyleToolbarProps {
+  styles: CellStyle[];
+  targetIndices: number[];
+  onSetStyle: <K extends keyof CellStyle>(field: K, value: NonNullable<CellStyle[K]>) => void;
+}
+
+function CellStyleToolbar({
+  styles,
+  targetIndices,
+  onSetStyle,
+}: CellStyleToolbarProps) {
+  const activeSize = commonFieldValue(styles, targetIndices, 'size');
+  const activeFont = commonFieldValue(styles, targetIndices, 'font');
+  const activeAlign = commonFieldValue(styles, targetIndices, 'align');
+
+  return (
+    <div
+      onPointerDown={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()}
+      style={{
+        position: 'absolute',
+        top: -42,
+        left: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        background: 'white',
+        border: '1px solid #DCDCE0',
+        borderRadius: 6,
+        padding: '4px 8px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+        fontSize: 11,
+        fontFamily: 'inherit',
+        color: '#1f1f2a',
+        zIndex: 5,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <ToolbarGroup>
+        <SizeButton size="sm" active={activeSize === 'sm'} onClick={() => onSetStyle('size', 'sm')} />
+        <SizeButton size="md" active={activeSize === 'md'} onClick={() => onSetStyle('size', 'md')} />
+        <SizeButton size="lg" active={activeSize === 'lg'} onClick={() => onSetStyle('size', 'lg')} />
+        <SizeButton size="xl" active={activeSize === 'xl'} onClick={() => onSetStyle('size', 'xl')} />
+      </ToolbarGroup>
+      <ToolbarDivider />
+      <ToolbarGroup>
+        <FontButton font="sans" active={activeFont === 'sans'} onClick={() => onSetStyle('font', 'sans')} />
+        <FontButton font="serif" active={activeFont === 'serif'} onClick={() => onSetStyle('font', 'serif')} />
+        <FontButton font="mono" active={activeFont === 'mono'} onClick={() => onSetStyle('font', 'mono')} />
+      </ToolbarGroup>
+      <ToolbarDivider />
+      <ToolbarGroup>
+        <AlignButton align="left" active={activeAlign === 'left'} onClick={() => onSetStyle('align', 'left')} />
+        <AlignButton align="center" active={activeAlign === 'center'} onClick={() => onSetStyle('align', 'center')} />
+        <AlignButton align="right" active={activeAlign === 'right'} onClick={() => onSetStyle('align', 'right')} />
+      </ToolbarGroup>
+    </div>
+  );
+}
+
+function ToolbarGroup({ children }: { children: React.ReactNode }) {
+  return <div style={{ display: 'inline-flex', gap: 2 }}>{children}</div>;
+}
+
+function ToolbarDivider() {
+  return (
+    <span
+      aria-hidden
+      style={{ width: 1, height: 18, background: '#DCDCE0', display: 'inline-block' }}
+    />
+  );
+}
+
+const SIZE_LABEL: Record<CellSize, string> = { sm: 'S', md: 'M', lg: 'L', xl: 'XL' };
+
+function SizeButton({
+  size,
+  active,
+  onClick,
+}: {
+  size: CellSize;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const sizePx = SIZE_PX[size];
+  return (
+    <ToolbarButton active={active} onClick={onClick} title={`크기 ${SIZE_LABEL[size]}`}>
+      <span style={{ fontSize: Math.min(14, sizePx), fontWeight: 600, lineHeight: 1 }}>
+        {SIZE_LABEL[size]}
+      </span>
+    </ToolbarButton>
+  );
+}
+
+const FONT_LABEL: Record<CellFont, string> = { sans: '본문', serif: '명조', mono: '고정폭' };
+
+function FontButton({
+  font,
+  active,
+  onClick,
+}: {
+  font: CellFont;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <ToolbarButton active={active} onClick={onClick} title={`글꼴 ${FONT_LABEL[font]}`}>
+      <span style={{ fontFamily: FONT_FAMILY[font], fontSize: 12, lineHeight: 1 }}>Aa</span>
+    </ToolbarButton>
+  );
+}
+
+function AlignButton({
+  align,
+  active,
+  onClick,
+}: {
+  align: CellAlign;
+  active: boolean;
+  onClick: () => void;
+}) {
+  // 정렬 아이콘은 짧은 / 긴 선 조합으로.
+  const icon = align === 'left' ? '⫷' : align === 'center' ? '☰' : '⫸';
+  const label = align === 'left' ? '왼쪽 정렬' : align === 'center' ? '가운데 정렬' : '오른쪽 정렬';
+  return (
+    <ToolbarButton active={active} onClick={onClick} title={label}>
+      <AlignIcon align={align} />
+      <span style={{ display: 'none' }}>{icon}</span>
+    </ToolbarButton>
+  );
+}
+
+function AlignIcon({ align }: { align: CellAlign }) {
+  // 가로 막대 3개 — align 에 따라 길이/위치 다르게.
+  const bars =
+    align === 'left'
+      ? [14, 10, 12]
+      : align === 'center'
+        ? [12, 8, 12]
+        : [14, 10, 12];
+  return (
+    <svg width="14" height="10" viewBox="0 0 14 10" aria-hidden>
+      {bars.map((w, i) => {
+        let x = 0;
+        if (align === 'center') x = (14 - w) / 2;
+        else if (align === 'right') x = 14 - w;
+        return (
+          <rect
+            key={i}
+            x={x}
+            y={i * 3 + 0.5}
+            width={w}
+            height={1.5}
+            fill="currentColor"
+            rx={0.5}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+function ToolbarButton({
+  active,
+  onClick,
+  title,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      title={title}
+      aria-pressed={active}
+      style={{
+        width: 26,
+        height: 24,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: active ? '#1F1F2A' : 'transparent',
+        color: active ? '#F5F5F7' : '#1f1f2a',
+        border: '1px solid',
+        borderColor: active ? '#1F1F2A' : 'transparent',
+        borderRadius: 4,
+        cursor: 'pointer',
+        padding: 0,
+        fontFamily: 'inherit',
+      }}
+      onMouseEnter={(e) => {
+        if (!active) e.currentTarget.style.background = '#F7F7F8';
+      }}
+      onMouseLeave={(e) => {
+        if (!active) e.currentTarget.style.background = 'transparent';
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -970,13 +1326,20 @@ function addRowAt(
 ) {
   const { rows, cols, cells, rowHeights, h } = shape.props;
   const cellMerges = shape.props.cellMerges ?? [];
+  const cellStyles = shape.props.cellStyles ?? [];
   if (rows >= MAX_ROWS) return;
   const insertAt = Math.max(0, Math.min(rows, rowIndex));
   const newRowCells = Array.from({ length: cols }, () => '');
+  const newRowStyles = Array.from({ length: cols }, () => ({}) as CellStyle);
   const newCells = [
     ...cells.slice(0, insertAt * cols),
     ...newRowCells,
     ...cells.slice(insertAt * cols),
+  ];
+  const newCellStyles = [
+    ...cellStyles.slice(0, insertAt * cols),
+    ...newRowStyles,
+    ...cellStyles.slice(insertAt * cols),
   ];
   const newRowHeights = [
     ...rowHeights.slice(0, insertAt),
@@ -989,6 +1352,7 @@ function addRowAt(
     {
       rows: rows + 1,
       cells: newCells,
+      cellStyles: newCellStyles,
       rowHeights: newRowHeights,
       h: h + DEFAULT_ROW_H,
       cellMerges: shiftMergesForAddRow(cellMerges, insertAt),
@@ -1005,17 +1369,21 @@ function addColAt(
 ) {
   const { rows, cols, cells, colWidths, w } = shape.props;
   const cellMerges = shape.props.cellMerges ?? [];
+  const cellStyles = shape.props.cellStyles ?? [];
   if (cols >= MAX_COLS) return;
   const insertAt = Math.max(0, Math.min(cols, colIndex));
   const newCols = cols + 1;
   const newCells: string[] = [];
+  const newCellStyles: CellStyle[] = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < newCols; c++) {
       if (c === insertAt) {
         newCells.push('');
+        newCellStyles.push({});
       } else {
         const oldC = c < insertAt ? c : c - 1;
         newCells.push(cells[r * cols + oldC] ?? '');
+        newCellStyles.push(cellStyles[r * cols + oldC] ?? {});
       }
     }
   }
@@ -1030,6 +1398,7 @@ function addColAt(
     {
       cols: newCols,
       cells: newCells,
+      cellStyles: newCellStyles,
       colWidths: newColWidths,
       w: w + DEFAULT_COL_W,
       cellMerges: shiftMergesForAddCol(cellMerges, insertAt),
@@ -1045,11 +1414,16 @@ function removeRowAt(
 ) {
   const { rows, cols, cells, rowHeights, h } = shape.props;
   const cellMerges = shape.props.cellMerges ?? [];
+  const cellStyles = shape.props.cellStyles ?? [];
   if (rows <= 1) return;
   const idx = Math.max(0, Math.min(rows - 1, rowIndex));
   const newCells = [
     ...cells.slice(0, idx * cols),
     ...cells.slice((idx + 1) * cols),
+  ];
+  const newCellStyles = [
+    ...cellStyles.slice(0, idx * cols),
+    ...cellStyles.slice((idx + 1) * cols),
   ];
   const removed = rowHeights[idx] ?? DEFAULT_ROW_H;
   const newRowHeights = [
@@ -1062,6 +1436,7 @@ function removeRowAt(
     {
       rows: rows - 1,
       cells: newCells,
+      cellStyles: newCellStyles,
       rowHeights: newRowHeights,
       h: h - removed,
       cellMerges: shiftMergesForRemoveRow(cellMerges, idx),
@@ -1077,13 +1452,16 @@ function removeColAt(
 ) {
   const { rows, cols, cells, colWidths, w } = shape.props;
   const cellMerges = shape.props.cellMerges ?? [];
+  const cellStyles = shape.props.cellStyles ?? [];
   if (cols <= 1) return;
   const idx = Math.max(0, Math.min(cols - 1, colIndex));
   const newCells: string[] = [];
+  const newCellStyles: CellStyle[] = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (c === idx) continue;
       newCells.push(cells[r * cols + c] ?? '');
+      newCellStyles.push(cellStyles[r * cols + c] ?? {});
     }
   }
   const removed = colWidths[idx] ?? DEFAULT_COL_W;
@@ -1097,6 +1475,7 @@ function removeColAt(
     {
       cols: cols - 1,
       cells: newCells,
+      cellStyles: newCellStyles,
       colWidths: newColWidths,
       w: w - removed,
       cellMerges: shiftMergesForRemoveCol(cellMerges, idx),
