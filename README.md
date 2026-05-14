@@ -46,7 +46,7 @@
 | 2026-05-13 | D-015 | **수정 권한 요청/승인 + 알림 inbox** *(O-015 부분 해결)* | **스토리 단위 / 영구 / DB 보관**. 비-owner 가 우상단 "읽기 전용" 배지 클릭 → owner 에게 `edit_request` 알림. owner 가 허용 시 `story_permissions.editor` 부여 + 요청자에게 승인 알림 → 클릭 시 페이지 리로드되며 편집 가능. Realtime push 는 broadcast 채널 `user-notifications:{userId}` (익명 사용자 Supabase 세션 부재 우회). 익명/Google 모두 동일 UX ([§ 17.6](DESIGN.md#176-d-015-수정-권한-요청-및-알림-시스템-구현-메모)) |
 | 2026-05-13 | D-016 | **tldraw Hobby License attribution + Editor abstraction L1** | 비상업적 사용 명시 (README "📜 라이선스" + 랜딩 푸터 + [§ 17.7](DESIGN.md#177-tldraw-라이선스-가이드) 라이선스 가이드). `lib/editor/index.ts` 신설로 tldraw 사용 표면 (components / hooks / shape utils / types) 한곳에 re-export. 9개 소비처는 `@/lib/editor` 만 import. 미래 editor 교체 (Excalidraw 등) 시 본 파일에 동일 시그니처 adapter 만 만들면 swap 가능 ([§ 17.8](DESIGN.md#178-editor-교체-대비-abstraction-가이드)) |
 | 2026-05-13 | D-017 | **Realtime sync hardening + per-story 정원 25명 제한** | Sync 코드 누적 흔적 정리 + 데이터 손실 핵심 케이스 차단 + 50명 대비 성능 폴리시 + 정원 cap. **Cleanup**: console.log 정리, 이중 fromUserId 안전망 제거, `flushSave`/`flushPendingSave` 통합, status 디바운스 1.5초로 단축, keepalive 45초로 늘림. **Quick wins**: Smart autosave (다른 사용자 그릴 때 연기 — owner snapshot 덮어쓰기 손실 차단), Non-destructive reconnect (replace → merge + catch-up broadcast), Broadcast throttle 50ms batching + dedupe. **50명 폴리시**: cursor 30Hz→15Hz, laser 60Hz→30Hz. **정원**: `MAX_STORY_PRESENCES = 25` — 초과 시 untrack + `OverflowNotice` 표시 (다시 시도 버튼만). 자동 재시도 없음. 50명 운영 시 Yjs CRDT 마이그레이션 필요 ([§ 17.9](DESIGN.md#179-d-017-realtime-sync-hardening-구현-메모)) |
-| 2026-05-13 | D-018 | **Google Drive 연동 — Phase 8a PoC + 8b 본격** *(O-013 부분 해결)* | **8a (PoC)**: URL paste → tldraw `gdrive-file` custom shape → 클릭 시 split-screen iframe (Sheets `/edit`, 그 외 `/preview`). OAuth/Picker/폴더 없음. **8b (본격)**: `drive.file` scope + Google Picker SDK + 폴더 자동 생성 (`onuri-studio/{채널 [id]}/{스토리 [id]}/`) + **Shortcut** (원본 보존) + 폴더 단위 anyone-with-link viewer share. **Export/Import**: `.onuri.json` 에선 `fileId` 제거 + `imported` flag, import 측은 아이콘만. **이름 변경**: 채널/스토리 rename 시 Drive 폴더도 자동 rename ([§ 17.10](DESIGN.md#1710-d-018-google-drive-연동-구현-메모)) |
+| 2026-05-13 | D-018 | **Google Drive 연동 — Phase 8a + 8b 완료** *(O-013 부분 해결)* | **8a**: URL paste → `gdrive-file` custom shape → 클릭 시 split-screen iframe (Sheets `/edit`, 그 외 `/preview`) + 너비 resize 핸들. **8b**: `drive.file` scope + Google Picker SDK + 마이페이지 Workspace path 설정 + 폴더 자동 생성 (`{workspace}/{채널 [id]}/{스토리 [id]}/`) + Shortcut 첨부 (원본 보존) + 폴더 단위 anyone-with-link viewer share + onDelete cleanup hook. **모두 client-side Drive API** (session.provider_token). **Export**: `fileId`/`embedUrl` 제거 + `imported` flag stamp, import 측은 아이콘만 표시 ([§ 17.10](DESIGN.md#1710-d-018-google-drive-연동-구현-메모)) |
 
 ### ⏳ 미해결 (사용자 검토 대기)
 
@@ -65,13 +65,13 @@
 ## 📊 전체 진행률
 
 ```
-전체:        [███████████████░░░░░]  73%   (~6.5 / 9 phases)
+전체:        [████████████████░░░░]  78%   (~7.0 / 9 phases)
 MVP (1~6):   [████████████████████]  98%   (~5.9 / 6 phases)
-확장 (7~9):  [██░░░░░░░░░░░░░░░░░░]  13%   (~0.4 / 3 phases)
+확장 (7~9):  [████████░░░░░░░░░░░░]  37%   (~1.1 / 3 phases)
 ```
 
 > 위 바는 Phase 단위. 한 Phase 안의 세부 체크리스트는 [§ Phase별 체크리스트](#-phase별-체크리스트) 참조.
-> **최근 적용 결정** (2026-05-13): D-013 Google SSO · D-014 사용자 유형별 권한 · D-015 수정 권한 요청 · D-016 tldraw 라이선스 + Editor abstraction L1 · D-017 Sync hardening + 25명 정원 · D-018 Google Drive 연동 (Phase 8a PoC 시작).
+> **최근 적용 결정** (2026-05-13): D-013 Google SSO · D-014 사용자 유형별 권한 · D-015 수정 권한 요청 · D-016 tldraw 라이선스 + Editor abstraction L1 · D-017 Sync hardening + 25명 정원 · D-018 Google Drive 연동 (Phase 8a + 8b 완료, Picker + 폴더 자동 생성 + Shortcut).
 > **인프라**: Vercel 스테이징 배포 완료 ([onuri-studio.vercel.app](https://onuri-studio.vercel.app)). Supabase 무료 티어 사용량은 `/admin` 페이지에서 실시간 확인 가능.
 
 ---
@@ -111,7 +111,7 @@ gantt
 | 5     | 내보내기/가져오기 + 관리자                    | ✅ 완료 | `[██████████] 100%` |
 | 6     | 보안 강화 + 모바일 + 스테이징                 | 🟢 진행 | `[█████████░]  90%` |
 | 7     | Google SSO *(확장)*                           | 🟢 진행 | `[███░░░░░░░]  30%` |
-| 8     | Google Workspace 연계 *(확장)*                | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
+| 8     | Google Workspace 연계 *(확장)*                | 🟢 진행 | `[████████░░]  80%` |
 | 9     | 이메일 매직 링크 + 도메인 + 프로덕션 *(확장)* | ⏸ 대기 | `[░░░░░░░░░░]   0%` |
 
 > 범례: ✅ 완료 · 🟢 진행 중 · ⏳ 다음 차례 · ⏸ 대기
@@ -298,12 +298,36 @@ gantt
 </details>
 
 <details>
-<summary><b>Phase 8 — Google Workspace 연계</b> ⏸ (확장)</summary>
+<summary><b>Phase 8 — Google Workspace 연계</b> 🟢 (확장)</summary>
 
-- [ ] 별도 OAuth scope (drive.file/spreadsheets/presentations)
-- [ ] `external_integrations` 테이블 활성 사용 + 토큰 암호화
-- [ ] 화이트보드에 Sheets/Slides 임베드 컴포넌트
-- [ ] `OnuriFile.external` 필드 채움
+**D-018 적용** (2026-05-13): Phase 8a (PoC) + 8b (본격) — Google Drive 첨부 완료.
+
+**Phase 8a — URL paste + 임베드** ✅
+- [x] tldraw 의 새 custom shape `gdrive-file` (mime type 별 아이콘/색)
+- [x] URL paste 모달 + 자동 파서 (Sheets / Docs / Slides / Drive 공유 링크)
+- [x] split-screen iframe 패널 (Sheets `/edit` / 그 외 `/preview`)
+- [x] 좌측 핸들로 패널 너비 resize
+
+**Phase 8b — Picker + 폴더 자동 생성 + Shortcut** ✅
+- [x] migration 0012 (workspace/folder/attachments 컬럼/테이블)
+- [x] 마이페이지 Drive Workspace 설정 섹션 (Google 사용자 한정)
+- [x] Google Picker SDK + Drive API client-side wrapper
+- [x] 첨부 흐름: workspace ensure → 채널/스토리 폴더 ensure → Picker → Shortcut → DB
+- [x] 폴더 단위 anyone-with-link viewer 권한 자동 share
+- [x] Workspace 없을 때 Hybrid 안내 (빠른 설정 / 마이페이지)
+- [x] onDelete hook (shape 삭제 시 DB row + Drive shortcut cleanup)
+- [x] Export `.onuri.json` 시 `fileId`/`embedUrl` 제거 + `imported` flag stamp
+- [ ] 채널/스토리 rename → Drive 폴더 자동 rename (선택, deferred)
+- [ ] 양방향 동기화 (Sheets webhook 등) — O-013 잔여 결정 사항
+
+> ⚠ Drive API 호출은 모두 **client-side** (`session.provider_token` + `gapi.client.drive`).
+> 서버 측 token 암호화 / refresh 불필요 — 사용자 active 상태에서만 첨부/삭제.
+
+**USER prerequisites** (모두 사용자가 직접 설정):
+- Google Cloud Console: Drive API + Picker API 활성 + drive.file scope + API key
+- Supabase Google provider: Additional scope `drive.file` 추가
+- Vercel + .env.local: `NEXT_PUBLIC_GOOGLE_API_KEY`
+- Supabase SQL Editor: migration `0012_gdrive_integration.sql` 실행
 
 </details>
 

@@ -388,6 +388,29 @@ export function StudioCanvas({
         },
       );
 
+      // D-018 Phase 8b: gdrive-file shape 가 삭제되면 DB row + Drive shortcut cleanup.
+      // source==='user' 만 처리 (remote 는 다른 사용자가 이미 정리한 결과 — 우리는 안 함).
+      // imported=true shape (외부 import) 는 fileId 없거나 다른 owner 거라 cleanup skip.
+      // type 비교는 cast — 'gdrive-file' 은 built-in union 에 없는 custom type.
+      const disposeAfterDelete = ed.sideEffects.registerAfterDeleteHandler(
+        'shape',
+        (record, source) => {
+          if (source !== 'user') return;
+          if ((record.type as string) !== 'gdrive-file') return;
+          const props = (record as unknown as { props?: { fileId?: string; imported?: boolean } })
+            .props;
+          if (!props?.fileId || props.imported) return;
+          // fire-and-forget — 실패해도 사용자한테 알림 안 함 (best-effort cleanup).
+          // dynamic import 로 cleanupGdriveAttachment 가 그 모듈 안에서만 사용되도록.
+          void import('@/lib/client/gdrive-attach-flow').then(({ cleanupGdriveAttachment }) => {
+            void cleanupGdriveAttachment({
+              storyId,
+              gdriveFileId: props.fileId!,
+            });
+          });
+        },
+      );
+
       // 도구 모드에서 사용자가 미리 고른 "사용자 지정 색상" (pendingCustomColor)
       // 을 새로 만들어지는 모든 도형 타입의 meta.customColor 에 stamp.
       // 도형 선택 없이 색을 골라두고 그리면 그 색이 적용되도록 — 선택 도형 picker
@@ -518,6 +541,7 @@ export function StudioCanvas({
         disposeBeforeCreate();
         disposeBeforeCreateColor();
         disposeBeforeChange();
+        disposeAfterDelete();
       };
     },
     [
@@ -529,6 +553,7 @@ export function StudioCanvas({
       onEditorMount,
       currentUserId,
       flushPendingSave,
+      storyId,
     ],
   );
 

@@ -3,6 +3,7 @@
 import {
   ensureFolder,
   createShortcut,
+  deleteFile,
   shareAnyoneWithLink,
   GDriveApiError,
 } from './gdrive-api';
@@ -10,6 +11,7 @@ import { showGdrivePicker, type PickedFile } from './gdrive-picker';
 import { getDriveAccessToken } from './gdrive-token';
 import { gdriveFolderName, type GDriveWorkspace } from '@/lib/domain/gdrive';
 import { saveGdriveAttachmentAction } from '@/app/actions/save-gdrive-attachment';
+import { deleteGdriveAttachmentAction } from '@/app/actions/delete-gdrive-attachment';
 import { buildGdriveEmbedUrl } from '@/lib/usecases/parse-gdrive-url';
 
 // D-018 Phase 8b: Drive 첨부 high-level flow.
@@ -164,5 +166,42 @@ export async function runDriveAttachFlow(
     }
     console.error('[runDriveAttachFlow] 알 수 없는 에러:', err);
     return { ok: false, error: '알 수 없는 오류가 발생했어요.' };
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Cleanup — shape 삭제 시 호출
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Drive 첨부 삭제 — DB row + Drive shortcut.
+ * 1) server action 이 DB 삭제하고 shortcut_file_id 반환.
+ * 2) client 가 그 shortcut 을 Drive 에서 삭제 (휴지통).
+ *
+ * Drive API 호출 실패는 best-effort — DB 는 이미 삭제됨.
+ * (사용자 Drive 의 shortcut 이 orphan 으로 남아도 사용자가 직접 정리 가능)
+ */
+export async function cleanupGdriveAttachment(input: {
+  storyId: string;
+  gdriveFileId: string;
+}): Promise<void> {
+  try {
+    const res = await deleteGdriveAttachmentAction(input);
+    if (!res.ok) {
+      console.warn('[cleanupGdriveAttachment] DB 삭제 실패:', res.error);
+      return;
+    }
+    if (!res.shortcutFileId) return;
+
+    const tokenRes = await getDriveAccessToken();
+    if (!tokenRes.ok || !tokenRes.accessToken) {
+      console.warn(
+        '[cleanupGdriveAttachment] access token 없음 — shortcut orphan 남음',
+      );
+      return;
+    }
+    await deleteFile(tokenRes.accessToken, res.shortcutFileId);
+  } catch (err) {
+    console.error('[cleanupGdriveAttachment] 에러:', err);
   }
 }

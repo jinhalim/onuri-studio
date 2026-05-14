@@ -71,7 +71,10 @@ export function exportAsOnuriJson(
 ): ExportResult {
   try {
     const snapshot = editor.getSnapshot();
-    const json = JSON.stringify(snapshot);
+    // D-018: gdrive-file shape 들의 Drive-private 필드 제거 + imported=true 마킹.
+    // import 한 사용자는 원본 파일에 권한이 없으니 fileId/embedUrl 노출 의미 없음 + 보안.
+    const sanitized = sanitizeGdriveShapesForExport(snapshot);
+    const json = JSON.stringify(sanitized);
     const yDocBase64 = utf8ToBase64(json);
     const file: OnuriFile = {
       $schema: 'https://onuri.studio/schema/onuri-file/v1',
@@ -96,6 +99,31 @@ export function exportAsOnuriJson(
     console.error('[exportAsOnuriJson] 실패:', err);
     return { ok: false, reason: 'failed', error: err };
   }
+}
+
+// D-018: snapshot 안의 gdrive-file shape 들에서 Drive-private 필드 제거.
+// 깊은 복제 후 변환 — 원본 editor state 는 안 건드림.
+function sanitizeGdriveShapesForExport(snapshot: ReturnType<Editor['getSnapshot']>): unknown {
+  // structuredClone 으로 deep copy (snapshot 은 nested object).
+  const cloned = JSON.parse(JSON.stringify(snapshot)) as {
+    document?: { store?: Record<string, { type?: string; props?: Record<string, unknown> }> };
+    store?: Record<string, { type?: string; props?: Record<string, unknown> }>;
+  };
+  // tldraw v5 신/구 포맷 둘 다 지원: {document:{store,..}} 또는 {store,..}
+  const store = cloned.document?.store ?? cloned.store;
+  if (!store) return cloned;
+  for (const record of Object.values(store)) {
+    if (record && record.type === 'gdrive-file' && record.props) {
+      // fileId / embedUrl 제거, imported flag 마킹. fileName / mimeType 은 보존 (아이콘 표시용).
+      record.props = {
+        ...record.props,
+        fileId: '',
+        embedUrl: '',
+        imported: true,
+      };
+    }
+  }
+  return cloned;
 }
 
 // UTF-8 문자열을 base64 로 (btoa 는 Latin1 만 받으므로 인코딩 단계 필요)
