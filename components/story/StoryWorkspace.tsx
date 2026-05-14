@@ -76,6 +76,8 @@ export function StoryWorkspace({
   // D-018 PoC: 사용자가 명시적으로 패널을 닫으면 같은 shape 재선택해도 자동 안 열림.
   // 다른 gdrive shape 선택 시엔 다시 열림. shape.id 단위로 "닫힘 상태" 추적.
   const [closedPanelShapeIds, setClosedPanelShapeIds] = useState<Set<string>>(() => new Set());
+  // 패널 너비 — 사용자가 좌측 핸들 드래그로 조정. 세션 한정 (영속화 안 함).
+  const [panelWidth, setPanelWidth] = useState(480);
   const [laserShareMode, setLaserShareMode] = useState<LaserShareMode>('private');
   const [remoteLaserStrokes, setRemoteLaserStrokes] = useState<Map<string, RemoteLaserStroke>>(
     () => new Map(),
@@ -463,8 +465,11 @@ export function StoryWorkspace({
         {panelOpen && selectedGDriveShape && (
           <GDrivePanel
             shape={selectedGDriveShape}
+            width={panelWidth}
+            onWidthChange={setPanelWidth}
+            minWidth={320}
+            maxWidth={Math.max(400, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 300)}
             onClose={handleClosePanel}
-            className="w-2/5 min-w-[320px] max-w-[640px]"
           />
         )}
       </section>

@@ -35,6 +35,9 @@ const schema = z.object({
   // ─── Google Workspace (Phase 8+) ───
   GOOGLE_WORKSPACE_SCOPES: z.string().optional(),
   INTEGRATION_TOKEN_ENCRYPTION_KEY: z.string().optional(),
+  // Phase 8b: Google Picker SDK 용 API key. NEXT_PUBLIC_* 라 client 번들 포함.
+  // Picker API + Drive API 만 허용으로 Google Cloud Console 에서 제한 권장.
+  NEXT_PUBLIC_GOOGLE_API_KEY: z.string().optional(),
 
   // ─── 이메일 매직 링크 (Phase 9) ───
   RESEND_API_KEY: z.string().optional(),
@@ -68,6 +71,7 @@ export const env = schema.parse(
     GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
     GOOGLE_WORKSPACE_SCOPES: process.env.GOOGLE_WORKSPACE_SCOPES,
     INTEGRATION_TOKEN_ENCRYPTION_KEY: process.env.INTEGRATION_TOKEN_ENCRYPTION_KEY,
+    NEXT_PUBLIC_GOOGLE_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_API_KEY,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     EMAIL_FROM: process.env.EMAIL_FROM,
   }),
