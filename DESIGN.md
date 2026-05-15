@@ -948,7 +948,8 @@ provider.destroy() + 마지막 스냅샷 flush
 | 2026-05-13 | D-016 | **tldraw Hobby License attribution + Editor abstraction L1** | **라이선스 attribution**: README "📜 라이선스" 섹션 + [§ 17.7](#177-tldraw-라이선스-가이드) 라이선스 가이드 + 랜딩 페이지 푸터 ("Built with tldraw (Hobby License) · Non-commercial use only"). **L1 abstraction**: `lib/editor/index.ts` 신설로 tldraw 의 사용 표면 (components / hooks / shape utils / types) 을 한곳에 명시적 re-export. 9개 캔버스 관련 소비처는 `@/lib/editor` 만 import → tldraw 직접 import 는 `lib/editor/index.ts` + StudioCanvas CSS side-effect 두 곳만 남음. 미래 editor 교체 (Excalidraw / 자체 canvas 등) 검토 시 본 파일에 동일 시그니처 adapter 작성으로 swap 가능. 구현 메모 [§ 17.8](#178-editor-교체-대비-abstraction-가이드). | CLAUDE.md §13 ("예산 $0", "MIT 호환 라이선스 우선") 의 운영 가이드 구체화. 상업화 결정 시점에 SDK License 구매 OR alternative editor 로 swap. |
 | 2026-05-13 | D-017 | **Realtime sync hardening + per-story 정원 제한** | 누적된 sync 코드 정리 + 데이터 손실 quick wins + 50명 대비 throttle 조정 + 정원 cap. 구현 메모 [§ 17.9](#179-d-017-realtime-sync-hardening-구현-메모). | CLAUDE.md §8 (Realtime D-010) + §9 ("한 스토리당 20명") 갱신 — 25명 cap + 50명 운영 시 Yjs CRDT 이행. |
 | 2026-05-13 | D-018 | **Google Drive 연동 — Phase 8a + 8b 완료** (O-013 부분 해결) | Phase 8 단계적 진입. **8a**: URL paste → `gdrive-file` custom shape → split-screen iframe (너비 resize 가능). **8b**: `drive.file` scope + Picker SDK + 마이페이지 Workspace 설정 + 폴더 자동 생성 (`{workspace}/{채널 [id]}/{스토리 [id]}/`) + Shortcut + viewer share + onDelete cleanup. Client-side Drive API (session.provider_token). Export `fileId` 제거 + `imported` flag. 구현 메모 [§ 17.10](#1710-d-018-google-drive-연동-구현-메모). | CLAUDE.md §5 "Could" Google Workspace 연계 시작. §11 Phase 8 첫 결정. |
-| 2026-05-14 | D-019 | **표 도구 (TableShape) + Toolbar 70vw inline 확장** | 신규 custom shape `'table'` — props (`rows`/`cols`/`cells`/`colWidths`/`rowHeights`) 모두 직렬화 가능 → 기존 broadcast sync 가 자동 처리. 셀 더블클릭 → `<textarea>` 인라인 편집 (Enter/Tab/Esc), 셀 경계 드래그 → 열/행 너비·높이 조정, 표 선택 시 외곽 +/- 버튼 → 행/열 추가·삭제 (max 50×20), 코너 핸들 → 표 통째 비례 리사이즈. `CustomToolbar` 가 `DefaultToolbar` 의 OverflowingToolbar 임계점을 `maxItems=8/maxSizePx=470` → `20/1200` 으로 확장 → 와이드 스크린에서 거의 모든 도구 inline 노출 (좁은 화면은 자연 overflow). 표 버튼은 `TldrawUiMenuItem + custom SVG (TLUiIconJsx)`. 구현 메모 [§ 17.11](#1711-d-019-tableshape--toolbar-70vw-구현-메모). | CLAUDE.md §5 "Could" 의 템플릿 항목을 캔버스 내 표로 구현. Google Sheets 첨부 (D-018) 와 병행 — 빠른 메모 vs 본격 데이터 역할 분리. |
+| 2026-05-14 | D-019 | **표 도구 (TableShape) + Toolbar 70vw inline 확장** | 신규 custom shape `'table'` — props (`rows`/`cols`/`cells`/`colWidths`/`rowHeights`/`cellMerges`/`cellStyles`) 모두 직렬화 가능 → 기존 broadcast sync 가 자동 처리. 셀 더블클릭 (`onPointerDown` 으로 직접 카운팅 — tldraw 의 native dblclick suppression 우회) → `<textarea>` 인라인 편집 (Enter/Tab/Esc), 셀 경계 드래그 → 열/행 너비·높이 조정, 우클릭 컨텍스트 메뉴 → 행/열 추가·삭제 (max 50×20) + Shift+클릭 다중 선택 → "셀 병합" / "병합 해제", 코너 핸들 → 표 통째 비례 리사이즈. **셀별 텍스트 스타일** (`cellStyles[]`): size (sm/md/lg/xl) + font (sans/serif/mono) + align (left/center/right) — 표 선택 시 표 위쪽 mini-toolbar 노출, 활성값 표시 / 'mixed' 처리. customColor (StylePanel) 도 표 테두리/구분선에 반영. `CustomToolbar` 가 `DefaultToolbar` 의 OverflowingToolbar 임계점을 `maxItems=8/maxSizePx=470` → `20/1200` 으로 확장 + 표 grid picker (Excel 스타일 hover) 는 `createPortal(document.body)` + `position: fixed` 로 boundary item 양쪽 렌더 quirk 회피. 옛 snapshot 의 누락 필드 (cellMerges/cellStyles) 는 loadSnapshot 전 pre-migration 으로 보정. 구현 메모 [§ 17.11](#1711-d-019-tableshape--toolbar-70vw-구현-메모) + [§ 17.12](#1712-d-019-후속-보강-구현-메모). | CLAUDE.md §5 "Could" 의 템플릿 항목을 캔버스 내 표로 구현. Google Sheets 첨부 (D-018) 와 병행 — 빠른 메모 vs 본격 데이터 역할 분리. |
+| 2026-05-14 | D-020 | **노트 작성자 라벨 z-index 통일** | 기존 `NoteAuthorLayer` 는 viewport overlay (z-20) 라 노트가 다른 도형에 가려져도 항상 위에 떠 있었음 — 사용자 보고. 해결: `CustomNoteShapeUtilWithAuthor` (NoteShapeUtil subclass) 의 `component()` override 로 author 라벨을 노트의 HTMLContainer 안에 inline 렌더 → tldraw 의 shape z-index 에 자동 종속. 다른 도형이 노트를 덮으면 라벨도 함께 가려짐. `.configure({getCustomDisplayValues})` 의 customColor 동작은 base class 로 보존. | §5 메모지 기본 요구사항 ("by 작성자" 표시) 의 시각 정확도 보강 — 의도적 디자인 결정이 아니라 버그 수정에 가까움. |
 
 ### 17.2 D-007 색상 충돌 회피 알고리즘 상세
 
@@ -1425,6 +1426,101 @@ type TableShape = TLBaseShape<'table', {
 
 > tldraw built-in icon 에 grid/table 없어서 custom SVG 가 유일한 방법. 향후 brand SVG 통일 시 `assetUrls` override 로 register 도 가능.
 
+### 17.12 D-019 후속 보강 구현 메모
+
+§ 17.11 의 초기 표 도구 이후 사용자 보고를 기반으로 추가된 기능 / 버그 수정.
+
+#### 셀 병합 (cellMerges)
+
+데이터 모델:
+```ts
+interface CellMerge { row: number; col: number; rowspan: number; colspan: number }
+TableShape.props.cellMerges: CellMerge[]   // 좌상단 셀 좌표 + span
+```
+
+Render 분기:
+- `isCovered(r, c, merges)` 면 render skip (병합 영역 안 비-owner 셀).
+- `isMergeOwner(r, c, merges)` 면 cw/rh = sum(colWidths[c..c+colspan]) / sum(rowHeights[r..r+rowspan]).
+- 마지막 열/행에 닿으면 외곽 border 위임 — 셀 내부 우/하 border 안 그림.
+
+다중 셀 선택 (Shift+click):
+- `cellRange: { startRow, startCol, endRow, endCol } | null` 로컬 state.
+- Shift+click → 기존 startRow/Col 에서 클릭 셀까지 확장 + `stopPropagation` (tldraw shape 이동 차단).
+- 일반 클릭은 propagate → tldraw 의 표 자체 선택 / 드래그 정상 동작.
+- 범위 안 셀들은 accent-live (#4FD1C5) 18% 반투명 배경.
+
+행/열 추가·삭제 시 cellMerges 자동 조정:
+- `shiftMergesForAddRow/Col` — 위쪽 변화 X, 같은 라인 또는 아래/오른쪽이면 좌표 +1, 안을 가로지르면 span +1.
+- `shiftMergesForRemoveRow/Col` — 위쪽 변화 X, 안을 가로지르면 span -1. 결과가 1×1 이면 merge 제거.
+
+병합 / 해제:
+- `mergeCells`: 좌상단 텍스트 보존 + 나머지 비움 (Excel 동작). 기존에 범위와 겹치는 merge 제거.
+- `unmergeCells`: 정확히 일치하는 merge 만 제거.
+- 컨텍스트 메뉴 `canMerge` (범위 ≥ 2 셀 + 클릭이 범위 안) 일 때 옵션 노출.
+
+#### 셀별 텍스트 스타일 (cellStyles)
+
+데이터 모델:
+```ts
+type CellSize = 'sm' | 'md' | 'lg' | 'xl';
+type CellFont = 'sans' | 'serif' | 'mono';
+type CellAlign = 'left' | 'center' | 'right';
+interface CellStyle { size?: CellSize; font?: CellFont; align?: CellAlign }
+TableShape.props.cellStyles: CellStyle[]   // cells 와 동일 길이, 빈 객체 = 기본값
+```
+
+매핑:
+- size → fontSize: sm=11 / md=13 / lg=17 / xl=22 (px).
+- font → fontFamily: sans=Pretendard, serif=Georgia, mono=JetBrains Mono.
+- align → text-align + flex justifyContent (셀 div + textarea 양쪽).
+
+mini-toolbar (`CellStyleToolbar`):
+- 위치: 표 위쪽 `top: -42` (absolute), HTMLContainer `overflow: visible` 라 표 밖으로 나옴.
+- 표시 조건: shape selected + cellRange 있을 때 (편집 중이거나 단순 선택 둘 다).
+- 대상 셀: 편집 중이면 그 셀 1개, 그 외엔 cellRange 안 전체.
+- `commonFieldValue` 가 범위 내 모두 같으면 그 값 활성화 / 다르면 'mixed' (어느 것도 active 표시 X).
+- 글꼴 버튼은 해당 글꼴로 "Aa" 미리보기, 정렬 버튼은 막대 3개 SVG.
+
+행/열 추가·삭제 시 cellStyles 도 동일 패턴으로 조정 (행 추가 → cols 개 `{}` 삽입, 등).
+
+#### 셀 더블클릭 편집 버그 수정
+
+- 증상: 더블클릭해도 textarea 가 안 뜸.
+- 원인 1: tldraw 의 pointer system 이 `preventDefault` 로 native `dblclick` 이벤트 막아서 `onDoubleClick` 핸들러 fire 안 됨.
+- 원인 2: `canEdit() = false` 면 `editor.setEditingShape(id)` 가 `canEditShape` 체크에서 silent reject ([Editor.mjs:1956](node_modules/.pnpm/@tldraw+editor@5.0.0_@float_bad0cc238110556e63f552b070fd5516/node_modules/@tldraw/editor/dist-esm/lib/editor/Editor.mjs#L1956)).
+- 수정:
+  - `onPointerDown` 으로 직접 더블클릭 카운팅 (lastClickRef + DOUBLE_CLICK_MS=400).
+  - `canEdit() = true` 유지 — 우리가 직접 호출하는 `setEditingShape` 가 동작하도록.
+
+#### Snapshot pre-migration
+
+옛 snapshot 의 table shape 이 신규 필드 (`cellMerges`, `cellStyles`) 누락 시 `T.arrayOf` validator 가 reject → `loadSnapshot` 이 store 손상시켜 instance state 까지 사라짐 → 후속 render 의 `getCurrentPageId()`/`scribbles` 접근에서 TypeError.
+
+해결: `StudioCanvas.handleMount` 에 `migrateTableShapesInSnapshot(parsed)` — `loadSnapshot` 전에 JSON in-place 수정:
+- table type 인 record 중 `cellMerges` 가 array 아니면 `[]` 주입.
+- `cellStyles` 가 array 아니면 `rows*cols` 길이의 빈 객체 배열 주입.
+- TLEditorSnapshot (`{document.store}`) / TLStoreSnapshot (`{store}`) 두 포맷 모두 지원.
+
+#### tldraw Editor.dispose workaround
+
+tldraw v5.0.0 의 [`Editor.dispose:813`](node_modules/.pnpm/@tldraw+editor@5.0.0_@float_bad0cc238110556e63f552b070fd5516/node_modules/@tldraw/editor/dist-esm/lib/editor/Editor.mjs#L813) 이 `getInstanceState() === undefined` 시 defensive check 없이 `.followingUserId` 접근 → TypeError. HMR 재마운트 race 등에서 발생.
+
+해결: `handleMount` 에서 `ed.dispose` 를 try/catch wrapping. 실제 cleanup 은 이미 끝났으므로 무해. tldraw 자체 패치 나오면 제거 가능.
+
+#### 표 grid picker portal 화
+
+문제: `OverflowingToolbar` 가 boundary 도구를 main + overflow 양쪽에 렌더 (의도된 quirk). picker 가 `position: absolute` 라 좁은 overflow popover 안에서 clip.
+
+해결: `createPortal(picker, document.body)` + 버튼의 `getBoundingClientRect()` 기반 `position: fixed` 좌표 (viewport clamp 적용). 어느 위치 버튼이든 동일 UX.
+
+#### StylePanel 좁은 화면 드래그 차단
+
+`window.innerWidth < 768px` 일 때 `CustomStylePanel` 의 드래그 비활성 + offset 강제 reset. 사용자가 panel 을 안 보이는 영역까지 옮기던 버그 해결. `@media max-width: 767px` CSS 로 `.tlui-style-panel` 세로 스크롤 + overflow popover 세로 스크롤 + Toolbar 가로 스크롤 fallback.
+
+#### D-020 노트 작성자 라벨 z-index
+
+`NoteAuthorLayer` (viewport overlay, z-20) → `CustomNoteShapeUtilWithAuthor` (NoteShapeUtil subclass) 로 이전. `component()` override 가 노트의 HTMLContainer 안에 absolute 위치의 author 라벨 추가 → tldraw 의 shape z-index 자동 종속. customColor 동작은 `.configure({getCustomDisplayValues})` base class 로 보존.
+
 ---
 
 ## 18. 변경 이력
@@ -1439,3 +1535,4 @@ type TableShape = TLBaseShape<'table', {
 | 2026-05-12 | 0.6.0 | **D-013 Google SSO + D-014 사용자 유형별 권한**. provider abstraction 의 google 활성화 + 익명 → Google 흡수. 익명 middleware 가드 + 나가기 모달 + 비-owner export 차단. |
 | 2026-05-13 | 0.7.0 | **D-015 ~ D-017 일괄 적용**. <br>**D-015**: 스토리 단위 수정 권한 요청/승인 + DB 알림 inbox (`story_permissions` / `notifications` 테이블 + broadcast push + UI 4종). <br>**D-016**: tldraw Hobby License attribution (README + DESIGN § 17.7 + 랜딩 푸터) + Editor abstraction L1 (`lib/editor/index.ts` re-export, 9개 소비처 일괄 전환, § 17.8 가이드). <br>**D-017**: Realtime sync hardening — cleanup (console.log / 이중 안전망 제거 / flushSave 통합 / status 디바운스 단축 / keepalive 45s) + Quick wins (Smart autosave / Non-destructive reconnect / 50ms broadcast batching) + 50명 폴리시 (cursor 15Hz / laser 30Hz) + **per-story 25명 정원 cap + OverflowNotice** (§ 17.9). |
 | 2026-05-14 | 0.8.0 | **D-018 Phase 8b 마무리 + D-019 표 도구**. <br>**D-018 보강**: Picker `setAppId(NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER)` 추가 (drive.file scope + Picker 404 해결), 양방향 rename (`renameDriveFile` / `getDriveFileName` + refresh 버튼), 아이콘 UX (더블클릭 인라인 편집 + 리사이즈 + 비례 스케일), 읽기 모드 사용자 `/preview` URL 강제, Frame `customColor` 의 안쪽 fill 50% 연한 tint, "Drive 폴더 열기" 옵션 (Picker 없이 폴더만 ensure), workspace 미설정 hybrid 안내 dialog. <br>**D-019**: 신규 `'table'` custom shape — 셀 인라인 편집 + 경계 드래그 리사이즈 + 행/열 추가·삭제 (max 50×20). CustomToolbar 가 `OverflowingToolbar` 임계점 (`maxItems=8 / maxSizePx=470`) 을 `20 / 1200` 으로 확장 → 와이드 스크린에서 거의 모든 도구 inline (§ 17.11). |
+| 2026-05-14 | 0.9.0 | **D-019 후속 보강 + D-020 노트 작성자 z-index + 다양한 fix** (§ 17.12). <br>**D-019 확장**: (1) 셀 병합 — Shift+click 다중 선택 + 우클릭 메뉴 "병합" / "병합 해제" + cellMerges 데이터 모델 + 행/열 추가·삭제 시 자동 조정. (2) 셀별 텍스트 스타일 — cellStyles 배열 (size/font/align) + 표 위쪽 mini-toolbar (size 4 / font 3 / align 3) + 활성/mixed 표시. (3) 셀 더블클릭 편집 버그 수정 — onPointerDown 으로 직접 카운팅 + canEdit=true 유지. (4) Snapshot pre-migration — 옛 데이터 cellMerges/cellStyles 누락 보정. (5) grid picker portal — boundary item quirk 회피. (6) StylePanel 좁은 화면 드래그 차단 + 모바일 오버플로 스크롤 CSS. (7) tldraw Editor.dispose try/catch workaround. <br>**D-020**: 노트 "by 작성자" 라벨을 viewport overlay 에서 노트 shape 내부 inline 렌더로 이전 (NoteAuthorLayer 제거 → CustomNoteShapeUtilWithAuthor subclass) — 다른 도형이 노트를 가리면 라벨도 함께 가려짐. <br>**HANDOFF.md 신설** — 새 세션 / 다른 계정 / PC 에서 작업 재개 가이드. |

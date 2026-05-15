@@ -17,6 +17,7 @@
 | --- | --- |
 | [`Claude.md`](Claude.md) | AI 코딩 도구에 붙여넣는 **원본 프롬프트** (제품 정의서) — 결정 이력 부록 포함 |
 | [`DESIGN.md`](DESIGN.md) | 구현 가능한 형태의 **기술 설계서** (폴더 구조 / API / DB / 인증) — § 17 결정 사항 포함 |
+| [`HANDOFF.md`](HANDOFF.md) | **새 Claude 세션 / 다른 계정 / 다른 PC** 에서 작업 재개 시 첫 참조 — 환경 설정 + 현재 상태 + 다음 작업 |
 | `README.md` | **본 문서** — 진행 상황 + 결정 이력 트래커 |
 
 ---
@@ -47,7 +48,8 @@
 | 2026-05-13 | D-016 | **tldraw Hobby License attribution + Editor abstraction L1** | 비상업적 사용 명시 (README "📜 라이선스" + 랜딩 푸터 + [§ 17.7](DESIGN.md#177-tldraw-라이선스-가이드) 라이선스 가이드). `lib/editor/index.ts` 신설로 tldraw 사용 표면 (components / hooks / shape utils / types) 한곳에 re-export. 9개 소비처는 `@/lib/editor` 만 import. 미래 editor 교체 (Excalidraw 등) 시 본 파일에 동일 시그니처 adapter 만 만들면 swap 가능 ([§ 17.8](DESIGN.md#178-editor-교체-대비-abstraction-가이드)) |
 | 2026-05-13 | D-017 | **Realtime sync hardening + per-story 정원 25명 제한** | Sync 코드 누적 흔적 정리 + 데이터 손실 핵심 케이스 차단 + 50명 대비 성능 폴리시 + 정원 cap. **Cleanup**: console.log 정리, 이중 fromUserId 안전망 제거, `flushSave`/`flushPendingSave` 통합, status 디바운스 1.5초로 단축, keepalive 45초로 늘림. **Quick wins**: Smart autosave (다른 사용자 그릴 때 연기 — owner snapshot 덮어쓰기 손실 차단), Non-destructive reconnect (replace → merge + catch-up broadcast), Broadcast throttle 50ms batching + dedupe. **50명 폴리시**: cursor 30Hz→15Hz, laser 60Hz→30Hz. **정원**: `MAX_STORY_PRESENCES = 25` — 초과 시 untrack + `OverflowNotice` 표시 (다시 시도 버튼만). 자동 재시도 없음. 50명 운영 시 Yjs CRDT 마이그레이션 필요 ([§ 17.9](DESIGN.md#179-d-017-realtime-sync-hardening-구현-메모)) |
 | 2026-05-13 | D-018 | **Google Drive 연동 — Phase 8a + 8b 완료** *(O-013 부분 해결)* | **8a**: URL paste → `gdrive-file` custom shape → 클릭 시 split-screen iframe (Sheets `/edit`, 그 외 `/preview`) + 너비 resize 핸들. **8b**: `drive.file` scope + Google Picker SDK + 마이페이지 Workspace path 설정 + 폴더 자동 생성 (`{workspace}/{채널 [id]}/{스토리 [id]}/`) + Shortcut 첨부 (원본 보존) + 폴더 단위 anyone-with-link viewer share + onDelete cleanup hook. **모두 client-side Drive API** (session.provider_token). **Export**: `fileId`/`embedUrl` 제거 + `imported` flag stamp, import 측은 아이콘만 표시 ([§ 17.10](DESIGN.md#1710-d-018-google-drive-연동-구현-메모)) |
-| 2026-05-14 | D-019 | **표 도구 (TableShape) + Toolbar 70vw inline 확장** | 신규 custom shape `'table'` — props (`rows`/`cols`/`cells`/`colWidths`/`rowHeights`) 모두 직렬화 가능 → 기존 broadcast sync 가 자동 처리. 셀 더블클릭 → `<textarea>` 인라인 편집 (Enter 저장 / Tab 다음 셀 / Esc 취소), 셀 경계 호버 → ↔/↕ 커서 → 드래그로 열 너비·행 높이 조정 (마지막 경계는 표 전체 확장), 표 선택 시 외곽 +/- 원형 버튼 4개 → 행/열 추가·삭제 (max 50×20), 코너 핸들 → 표 통째 비례 리사이즈 (onResize override). `CustomToolbar` 가 `DefaultToolbar` 의 `OverflowingToolbar` 임계점 (`maxItems=8 / maxSizePx=470`) 을 `20 / 1200` 으로 확장 → 와이드 스크린에서 거의 모든 도구 inline 노출 (좁은 화면은 자연 overflow). 표 버튼은 `TldrawUiMenuItem + custom SVG` (TLUiIconJsx). Google Sheets 첨부 (D-018) 와 병행 — 빠른 메모 vs 본격 데이터 ([§ 17.11](DESIGN.md#1711-d-019-tableshape--toolbar-70vw-구현-메모)) |
+| 2026-05-14 | D-019 | **표 도구 (TableShape) + Toolbar 70vw inline 확장** | 신규 custom shape `'table'` — props (`rows`/`cols`/`cells`/`colWidths`/`rowHeights`/`cellMerges`/`cellStyles`) 모두 직렬화 가능 → 기존 broadcast sync 자동 처리. **셀 편집**: 더블클릭 (onPointerDown 직접 카운팅으로 tldraw native dblclick suppression 우회) → `<textarea>` 인라인 편집. **구조**: 우클릭 컨텍스트 메뉴로 행/열 임의 위치 추가·삭제 (max 50×20). **셀 병합**: Shift+클릭 다중 선택 → 우클릭 "선택한 셀들 병합" / 병합 셀에서 "병합 해제". **셀별 텍스트 스타일** (`cellStyles[]`): size (sm/md/lg/xl) + font (sans/serif/mono) + align (left/center/right) — 표 위쪽 mini-toolbar (활성값 표시 / mixed). customColor (StylePanel) 도 표 테두리/구분선에 반영. **Toolbar 확장**: `CustomToolbar` 가 `OverflowingToolbar` 임계점 `8/470` → `20/1200` 확장 + 표 grid picker (Excel hover 스타일) 는 `createPortal(document.body)` + `position: fixed` 로 boundary item 양쪽 렌더 quirk 회피. **호환성**: 옛 snapshot 의 누락 필드 (cellMerges/cellStyles) 는 loadSnapshot 전 pre-migration 으로 보정. Google Sheets 첨부 (D-018) 와 병행 ([§ 17.11](DESIGN.md#1711-d-019-tableshape--toolbar-70vw-구현-메모) + [§ 17.12](DESIGN.md#1712-d-019-후속-보강-구현-메모)) |
+| 2026-05-14 | D-020 | **노트 작성자 라벨 z-index 통일** | 기존 `NoteAuthorLayer` 는 viewport overlay (z-20) 라 노트가 다른 도형에 가려져도 라벨이 위에 떠 있던 버그. 해결: `CustomNoteShapeUtilWithAuthor` (NoteShapeUtil subclass) 의 `component()` override 로 author 라벨을 노트의 HTMLContainer 안에 inline 렌더 → tldraw shape z-index 에 자동 종속. 다른 도형이 노트를 덮으면 라벨도 함께 가려짐. customColor 동작은 base class `.configure({getCustomDisplayValues})` 로 보존 |
 
 ### ⏳ 미해결 (사용자 검토 대기)
 
@@ -72,7 +74,7 @@ MVP (1~6):   [████████████████████]  98%
 ```
 
 > 위 바는 Phase 단위. 한 Phase 안의 세부 체크리스트는 [§ Phase별 체크리스트](#-phase별-체크리스트) 참조.
-> **최근 적용 결정** (2026-05-14): D-018 Phase 8b 마무리 (Picker setAppId 404 해결 + 양방향 rename + 아이콘 인라인 편집/리사이즈 + 읽기 모드 `/preview` 강제 + Frame 50% lighter fill) · **D-019** 표 도구 (TableShape) + Toolbar 70vw inline 확장.
+> **최근 적용 결정** (2026-05-14): D-019 표 도구 보강 (셀 병합 + 셀별 텍스트 스타일 + mini-toolbar + grid picker portal + snapshot pre-migration) · **D-020** 노트 작성자 라벨 z-index 통일. `HANDOFF.md` 신설 — 새 세션/계정/PC 에서 작업 재개 가이드.
 > **인프라**: Vercel 스테이징 배포 완료 ([onuri-studio.vercel.app](https://onuri-studio.vercel.app)). Supabase 무료 티어 사용량은 `/admin` 페이지에서 실시간 확인 가능.
 
 ---
