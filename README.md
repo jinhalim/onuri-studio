@@ -8,17 +8,24 @@
 ![mvp](https://img.shields.io/badge/MVP-3%2F6%20phases-FF3D5A?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-4FD1C5?style=flat-square)
 [![repo](https://img.shields.io/badge/github-jinhalim%2Fonuri--studio-9A9AA8?style=flat-square&logo=github)](https://github.com/jinhalim/onuri-studio)
+[![manual](https://img.shields.io/badge/📖_사용자_매뉴얼-바로보기-FF3D5A?style=flat-square)](docs/USER_MANUAL.md)
+
+> ### 🎯 처음이신가요?
+> **사용법 / 기능 / 스크린샷 / 데모 영상** 은 → **[📖 사용자 매뉴얼 (docs/USER_MANUAL.md)](docs/USER_MANUAL.md)**
+>
+> 라이브 데모: **[onuri-studio.vercel.app](https://onuri-studio.vercel.app)**
 
 ---
 
 ## 📚 문서
 
-| 문서 | 용도 |
-| --- | --- |
-| [`Claude.md`](Claude.md) | AI 코딩 도구에 붙여넣는 **원본 프롬프트** (제품 정의서) — 결정 이력 부록 포함 |
-| [`DESIGN.md`](DESIGN.md) | 구현 가능한 형태의 **기술 설계서** (폴더 구조 / API / DB / 인증) — § 17 결정 사항 포함 |
-| [`HANDOFF.md`](HANDOFF.md) | **새 Claude 세션 / 다른 계정 / 다른 PC** 에서 작업 재개 시 첫 참조 — 환경 설정 + 현재 상태 + 다음 작업 |
-| `README.md` | **본 문서** — 진행 상황 + 결정 이력 트래커 |
+| 문서 | 대상 | 용도 |
+| --- | --- | --- |
+| **[`docs/USER_MANUAL.md`](docs/USER_MANUAL.md)** | **일반 사용자** | **사용법 + 기능 소개 + 스크린샷 + 데모 영상** (16개 섹션, 첫 방문자 추천) |
+| [`Claude.md`](Claude.md) | 개발자 / AI 도구 | 원본 프롬프트 (제품 정의서) — 결정 이력 부록 포함 |
+| [`DESIGN.md`](DESIGN.md) | 개발자 | 기술 설계서 (폴더 구조 / API / DB / 인증) — § 17 결정 사항 |
+| [`HANDOFF.md`](HANDOFF.md) | 개발자 / 새 세션 | 새 Claude 세션 / 다른 계정 / PC 에서 작업 재개 시 첫 참조 |
+| `README.md` | 개발자 | **본 문서** — 진행 상황 + 결정 이력 트래커 |
 
 ---
 
