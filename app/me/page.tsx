@@ -101,11 +101,18 @@ export default async function MyPage() {
             ) : (
               user.linkedProviders.map((p) => <ProviderBadge key={p} provider={p} />)
             )}
-            <GoogleLinkSection
-              canConnectGoogle={canConnectGoogle}
-              initialRequest={googleLinkRequest}
-            />
           </dd>
+          {canConnectGoogle && (
+            <>
+              <dt className="text-fg-muted">Google 연동</dt>
+              <dd className="text-fg">
+                <GoogleLinkSection
+                  canConnectGoogle={canConnectGoogle}
+                  initialRequest={googleLinkRequest}
+                />
+              </dd>
+            </>
+          )}
         </dl>
         {/* TODO[Phase9-Email]: 익명일 때 "이메일로 저장" 버튼 노출 */}
       </section>
