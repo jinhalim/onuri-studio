@@ -86,7 +86,7 @@ export function GoogleLinkRequestsAdminSection() {
             onClick={() => setStatus(s)}
             className={`rounded-md px-2.5 py-1 text-[11px] font-medium ${
               status === s
-                ? 'bg-fg text-bg-bezel'
+                ? 'bg-fg text-brand-bezel'
                 : 'border border-divider bg-brand-surface text-fg-muted hover:text-fg'
             }`}
           >
@@ -173,7 +173,7 @@ function RequestRow({
             type="button"
             onClick={handleApprove}
             disabled={pending}
-            className="rounded-md bg-live px-2.5 py-1 text-[11px] font-medium text-bg-bezel hover:bg-live/90 disabled:opacity-50"
+            className="rounded-md bg-live px-2.5 py-1 text-[11px] font-medium text-brand-bezel hover:bg-live/90 disabled:opacity-50"
           >
             {pending ? '처리 중…' : '완료 처리'}
           </button>
