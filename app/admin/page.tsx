@@ -4,6 +4,7 @@ import { Wordmark } from '@/components/brand/Wordmark';
 import { SignedInBanner } from '@/components/auth/SignedInBanner';
 import { RelativeTime } from '@/components/shared/RelativeTime';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { GoogleLinkRequestsAdminSection } from '@/components/admin/GoogleLinkRequestsAdminSection';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
 import { getAdminDashboard } from '@/lib/usecases/get-admin-dashboard';
 import { getSupabaseUsage } from '@/lib/usecases/get-supabase-usage';
@@ -46,6 +47,9 @@ export default async function AdminPage() {
           시스템 통계 + 최근 활동. 모더레이션 기능은 후속 작업.
         </p>
       </section>
+
+      {/* D-021: Google 연동 요청 관리 (테스트 배포 모드) — 페이지 상단 배치. */}
+      <GoogleLinkRequestsAdminSection />
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard

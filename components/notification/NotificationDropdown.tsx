@@ -45,7 +45,7 @@ export function NotificationDropdown({
       setActiveRequest(n);
       return;
     }
-    // approved / denied 클릭 처리
+    // approved / denied / google_link_* 클릭 처리
     startTransition(async () => {
       if (!n.readAt) {
         onMarkReadLocally(n.id);
@@ -58,8 +58,15 @@ export function NotificationDropdown({
         // window.location.assign 으로 깨끗한 새 페이지 로드.
         onClose();
         window.location.assign(urls.story(n.payload.channelId, n.payload.storyId));
+      } else if (
+        n.type === 'google_link_approved' ||
+        n.type === 'google_link_rejected'
+      ) {
+        // D-021: 마이페이지로 이동해서 갱신된 Google 연동 상태 확인.
+        onClose();
+        window.location.assign('/me');
       }
-      // denied 는 read 처리만, 추가 동작 없음.
+      // denied / rejected 는 read 처리만, 추가 동작 없음.
     });
   };
 
@@ -147,7 +154,7 @@ function NotificationIcon({ type }: { type: Notification['type'] }) {
       </span>
     );
   }
-  if (type === 'edit_request_approved') {
+  if (type === 'edit_request_approved' || type === 'google_link_approved') {
     return (
       <span
         className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-500"
@@ -187,11 +194,30 @@ function NotificationLabel({ notification }: { notification: Notification }) {
       </p>
     );
   }
+  if (notification.type === 'edit_request_denied') {
+    return (
+      <p className="text-sm text-fg">
+        스토리 &ldquo;
+        <span className="font-semibold">{notification.payload.storyTitle}</span>
+        &rdquo; 의 수정 권한 요청이 거절되었습니다
+      </p>
+    );
+  }
+  if (notification.type === 'google_link_approved') {
+    return (
+      <p className="text-sm text-fg">
+        Google 연동 등록 완료 —{' '}
+        <span className="font-mono font-semibold">{notification.payload.email}</span>
+        {' '}으로 로그인 가능. 클릭해서 마이페이지로 이동.
+      </p>
+    );
+  }
+  // google_link_rejected
   return (
     <p className="text-sm text-fg">
-      스토리 &ldquo;
-      <span className="font-semibold">{notification.payload.storyTitle}</span>
-      &rdquo; 의 수정 권한 요청이 거절되었습니다
+      Google 연동 요청이 거부됐어요 —{' '}
+      <span className="font-mono">{notification.payload.email}</span>
+      {notification.payload.reason ? ` (${notification.payload.reason})` : ''}
     </p>
   );
 }

@@ -9,7 +9,7 @@ import { PermissionHistorySection } from '@/components/me/PermissionHistorySecti
 import { GDriveWorkspaceSection } from '@/components/me/GDriveWorkspaceSection';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { NotificationBell } from '@/components/notification/NotificationBell';
-import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { GoogleLinkSection } from '@/components/auth/GoogleLinkSection';
 import { ProviderBadge } from '@/components/auth/ProviderBadge';
 import { enabledProviders } from '@/lib/infra/auth/provider-registry';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
@@ -17,6 +17,7 @@ import { listMyChannels } from '@/lib/usecases/list-my-channels';
 import { getMyHistory } from '@/lib/usecases/get-my-history';
 import { getMyStoryPermissions } from '@/lib/usecases/get-my-story-permissions';
 import { getGdriveWorkspace } from '@/lib/usecases/get-gdrive-workspace';
+import { getMyGoogleLinkRequestAction } from '@/app/actions/get-my-google-link-request';
 
 // 마이페이지.
 // MVP 정책: 익명도 자기 채널 목록 확인 가능 (D-007 색이 정체성 역할).
@@ -27,11 +28,12 @@ export default async function MyPage() {
   if (!user) redirect('/');
 
   // 독립적인 데이터 fetch 병렬화
-  const [myChannels, history, permissions, gdriveWorkspace] = await Promise.all([
+  const [myChannels, history, permissions, gdriveWorkspace, googleLinkRequest] = await Promise.all([
     listMyChannels(user.id),
     getMyHistory(user.id),
     getMyStoryPermissions(user.id),
     user.isAnonymous ? Promise.resolve(null) : getGdriveWorkspace(user.id),
+    user.isAnonymous ? getMyGoogleLinkRequestAction() : Promise.resolve(null),
   ]);
   // 본인 소유 채널은 "내가 만든 채널" 섹션에 이미 표시 → recent 에서 제외해서 중복 방지
   const myChannelIds = new Set(myChannels.map((c) => c.id));
@@ -99,12 +101,10 @@ export default async function MyPage() {
             ) : (
               user.linkedProviders.map((p) => <ProviderBadge key={p} provider={p} />)
             )}
-            {canConnectGoogle && (
-              <GoogleSignInButton
-                label="Google 계정 연결"
-                className="h-8 px-3 text-xs"
-              />
-            )}
+            <GoogleLinkSection
+              canConnectGoogle={canConnectGoogle}
+              initialRequest={googleLinkRequest}
+            />
           </dd>
         </dl>
         {/* TODO[Phase9-Email]: 익명일 때 "이메일로 저장" 버튼 노출 */}

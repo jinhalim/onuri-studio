@@ -4,7 +4,18 @@
 export type NotificationType =
   | 'edit_request'
   | 'edit_request_approved'
-  | 'edit_request_denied';
+  | 'edit_request_denied'
+  | 'google_link_approved'
+  | 'google_link_rejected';
+
+// D-021: Google 연동 등록 요청 결과 payload.
+export interface GoogleLinkResponsePayload {
+  requestId: string;
+  email: string;
+  processedByNickname: string;
+  /** rejected 만 사용. */
+  reason?: string | null;
+}
 
 export interface EditRequestPayload {
   storyId: string;
@@ -50,9 +61,33 @@ export type Notification =
       payload: EditRequestResponsePayload;
       readAt: string | null;
       createdAt: string;
+    }
+  | {
+      id: string;
+      type: 'google_link_approved';
+      recipientUserId: string;
+      payload: GoogleLinkResponsePayload;
+      readAt: string | null;
+      createdAt: string;
+    }
+  | {
+      id: string;
+      type: 'google_link_rejected';
+      recipientUserId: string;
+      payload: GoogleLinkResponsePayload;
+      readAt: string | null;
+      createdAt: string;
     };
 
 // DB row → domain mapper. 호환성 위해 snake_case 만 받음.
+const KNOWN_TYPES = new Set<NotificationType>([
+  'edit_request',
+  'edit_request_approved',
+  'edit_request_denied',
+  'google_link_approved',
+  'google_link_rejected',
+]);
+
 export function mapNotificationRow(row: {
   id: string;
   recipient_user_id: string;
@@ -61,16 +96,12 @@ export function mapNotificationRow(row: {
   read_at: string | null;
   created_at: string;
 }): Notification | null {
-  if (
-    row.type !== 'edit_request' &&
-    row.type !== 'edit_request_approved' &&
-    row.type !== 'edit_request_denied'
-  ) {
+  if (!KNOWN_TYPES.has(row.type as NotificationType)) {
     return null;
   }
   return {
     id: row.id,
-    type: row.type,
+    type: row.type as NotificationType,
     recipientUserId: row.recipient_user_id,
     payload: row.payload as never,
     readAt: row.read_at,
