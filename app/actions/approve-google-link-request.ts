@@ -3,7 +3,6 @@
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/infra/supabase/admin';
 import { getCurrentUser } from '@/lib/usecases/get-current-user';
-import { idSchema } from '@/lib/security/validators';
 import { broadcastFromServer } from '@/lib/infra/realtime/broadcast-server';
 
 // D-021: admin 이 Google 연동 요청을 승인 처리.
@@ -17,7 +16,9 @@ export interface ApproveGoogleLinkResult {
   error?: string;
 }
 
-const inputSchema = z.object({ requestId: idSchema });
+// google_link_requests.id 는 UUID (gen_random_uuid). channel/story 의 nanoid 12자
+// idSchema 와 다른 포맷이라 별도 UUID validator 사용.
+const inputSchema = z.object({ requestId: z.string().uuid() });
 
 export async function approveGoogleLinkRequestAction(
   requestId: string,
