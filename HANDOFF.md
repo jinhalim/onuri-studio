@@ -3,8 +3,18 @@
 > 새 Claude 세션 / 다른 계정 / 다른 PC 에서 작업을 이어갈 때 첫 참조 문서.
 > 본 파일은 **현재 시점의 단편** — Decision Log SSOT 는 [`CLAUDE.md` 부록 A](CLAUDE.md), [`DESIGN.md` § 17](DESIGN.md), [`README.md`](README.md) 가 담당.
 
-마지막 갱신: 2026-05-14 (D-019 셀 스타일 mini-toolbar 까지 완료)
-마지막 커밋: [`d99c8ad`](https://github.com/jinhalim/onuri-studio/commit/d99c8ad) — Table 셀별 텍스트 스타일
+## 🛑 PROJECT STATUS: Portfolio Mode (Archived)
+
+**활성 개발 종료.** 본 프로젝트는 포트폴리오 / 학습 / 개인 사용 목적으로만 유지됩니다. 상업화 unit economics 비현실적이라는 결론 — 자세히는 [`README.md` § 프로젝트 상태](README.md#-프로젝트-상태--portfolio--personal-use).
+
+**새 세션에서 작업 재개 시 지침:**
+- 🐛 **버그 fix / 본인 사용용 개선** → 진행 OK
+- ✨ **신규 기능 / 수익화 작업** → 사용자에게 먼저 확인 (포트폴리오 모드 전환 후 활성 로드맵 없음)
+- 📋 미해결 항목은 "TODO" 가 아니라 [`README.md` § 미래 후보](README.md#-미래-후보-future-candidates) 로 재분류
+
+---
+
+마지막 활성 갱신: 2026-05-14 (D-021 Google 연동 요청 workflow + Portfolio 모드 전환)
 
 ---
 
@@ -25,9 +35,9 @@ pnpm run dev
 
 ## 📦 현재 상태
 
-### ✅ 완료된 기능 (Phase 1~8b + D-019)
+### ✅ 완료된 기능 (Phase 1~8b + D-013~D-021)
 
-- **인증**: 익명 (닉네임만) + Google SSO. 익명 → Google 흡수 흐름.
+- **인증**: 익명 (닉네임만) + Google SSO + D-021 등록 요청 workflow (testing 모드 영구).
 - **채널 / 스토리 CRUD** + 마이페이지 + 관리자 페이지.
 - **실시간 협업**: Supabase Realtime broadcast + presence (LWW). 정원 25명 cap.
 - **화이트보드** (tldraw v5): 기본 도구 + 임의 색상 (`shape.meta.customColor`) + 라이트/다크 모드 + Frame 50% lighter fill.
@@ -36,20 +46,25 @@ pnpm run dev
 - **D-018 Google Drive 연동**: Picker SDK + drive.file scope + Shortcut + Workspace path. 양방향 rename + refresh 버튼.
 - **D-019 표 도구**: TableShape (셀 편집 / 경계 드래그 / 행·열 추가·삭제 / 셀 병합 / 셀별 텍스트 스타일).
 - **D-020 노트 작성자 z-index 동기화** (NoteAuthorLayer 제거 + 셰이프 내부 inline 렌더).
+- **D-021 Google 연동 등록 요청 workflow** (testing 모드 영구 운영 — 사용자 신청 → admin 등록 → 알림).
 
-### 🔴 진행 중 / 사용자 검토 대기
+### 🔮 미래 후보 (Future Candidates)
 
-| # | 항목 | 다음 단계 |
-|---|---|---|
-| **tldraw Hobby License** | 신청 안 됨 / 받지 못함 | https://tldraw.dev/community/license 에서 신청 → 받으면 Vercel env `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` 등록. **이거 없으면 production 배포에서 캔버스 5초 뒤 사라짐**. |
-| O-009 썸네일 생성 | 미결정 | Channel Guide 의 스토리 카드 미리보기. tldraw `editor.getSvgString` 또는 `exportAs` 로 PNG. |
-| O-014 이메일 발신자 표기 | Phase 9 도메인 인증 시 | `noreply@onuri.studio` 등. |
+> 활성 로드맵 X. 만약 재시동 / 수익화 검토 시 재평가. 자세히는 [`README.md` § 미래 후보](README.md#-미래-후보-future-candidates).
+
+가장 영향 큰 항목:
+- **tldraw Hobby License 신청** — 안 받으면 production 캔버스 5초 뒤 사라짐 (`localhost` 는 정상)
+- **WCAG AA + Lighthouse 점검** — Phase 6 미체크
+- `/me` GoogleLinkSection 레이아웃 (D-021 미완료)
+- Yjs CRDT 마이그레이션 (50명+ 필요 시)
+- 상업 launch 시: 도메인 / 약관 / OAuth verification / 이메일 매직링크
 
 ### 🟡 알려진 한계 (의도된 trade-off)
 
 - 동시 편집 충돌: **last-write-wins** (CRDT 아님). 50명 운영 시 Yjs 마이그레이션 필요 ([§ 17.9](DESIGN.md#179-d-017-realtime-sync-hardening-구현-메모)).
 - Drive 폴더 단위 share: `appNotAuthorizedToChild` 403 가능 (graceful, 사용자 부담 X — [`§ 17.10`](DESIGN.md#1710-d-018-google-drive-연동-구현-메모)).
 - 표 셀 동시 편집: 같은 셀 동시 수정 시 LWW. 다른 셀은 안전.
+- Google OAuth testing 모드 100명 cap — D-021 workflow 로 admin 이 수동 등록.
 
 ---
 
@@ -168,14 +183,23 @@ git status
 
 ---
 
-## 🎯 다음 작업 후보 (우선순위순)
+## 🎯 만약 작업 재개한다면 (Future Candidates)
 
-1. **tldraw Hobby License 신청 + 등록** — production 배포 가능해짐.
-2. **Phase 9 준비**: `onuri.studio` 도메인 구매 검토 + Resend 도메인 인증.
-3. **O-009 썸네일**: Channel Guide 카드 미리보기.
-4. **채널/스토리 rename → Drive 폴더 rename 동기화** (D-018 deferred 항목).
-5. **모바일 / 태블릿 종합 테스트** — 터치, 핀치 줌, 가로 모드.
-6. **e2e 테스트 자동화** (Playwright) — 익명/Google 양 흐름.
+> 활성 우선순위 X (Portfolio Mode). 상황별로 가장 의미 있을 만한 후보:
+
+**본인 사용 / 친구 공유 시 가장 가치 있는 것:**
+1. **tldraw Hobby License 신청** — production 캔버스 정상 동작.
+
+**상업 launch 시 재검토:**
+2. 도메인 구매 + Phase 9 (이메일 매직링크 + 도메인 인증).
+3. tldraw 상업 SDK License 구매 또는 Excalidraw 대안 swap.
+4. 개인정보 처리방침 / 이용약관 / OAuth verification.
+
+**기능 polish:**
+5. O-009 Channel Guide 카드 썸네일.
+6. 채널/스토리 rename → Drive 폴더 동기 rename (D-018 deferred).
+7. 모바일 / 태블릿 종합 테스트 + WCAG AA + Lighthouse.
+8. e2e 테스트 자동화 (Playwright).
 
 ---
 

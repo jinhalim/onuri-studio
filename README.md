@@ -2,10 +2,10 @@
 
 > **The studio where everyone tunes in.** — 모두의 스토리, 우리의 스튜디오.
 >
-> URL 한 줄로 입장하는 실시간 협업 화이트보드. 채널(Channel) → 스토리(Story) 구조에서 다중 사용자가 Yjs CRDT로 동시 편집한다.
+> URL 한 줄로 입장하는 실시간 협업 화이트보드. 채널(Channel) → 스토리(Story) 구조에서 다중 사용자가 동시 편집한다.
 
-![status](https://img.shields.io/badge/status-Phase%204%20in%20progress-FF3D5A?style=flat-square)
-![mvp](https://img.shields.io/badge/MVP-3%2F6%20phases-FF3D5A?style=flat-square)
+![status](https://img.shields.io/badge/status-portfolio_(archived)-9A9AA8?style=flat-square)
+![tech](https://img.shields.io/badge/stack-Next.js_14_%2B_Supabase_%2B_tldraw-4FD1C5?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-4FD1C5?style=flat-square)
 [![repo](https://img.shields.io/badge/github-jinhalim%2Fonuri--studio-9A9AA8?style=flat-square&logo=github)](https://github.com/jinhalim/onuri-studio)
 [![manual](https://img.shields.io/badge/📖_사용자_매뉴얼-바로보기-FF3D5A?style=flat-square)](docs/USER_MANUAL.md)
@@ -13,7 +13,66 @@
 > ### 🎯 처음이신가요?
 > **사용법 / 기능 / 스크린샷 / 데모 영상** 은 → **[📖 사용자 매뉴얼 (docs/USER_MANUAL.md)](docs/USER_MANUAL.md)**
 >
-> 라이브 데모: **[onuri-studio.vercel.app](https://onuri-studio.vercel.app)**
+> 라이브 데모 (테스트 모드): **[onuri-studio.vercel.app](https://onuri-studio.vercel.app)**
+
+---
+
+## 📌 프로젝트 상태 — Portfolio / Personal Use
+
+본 프로젝트는 **상업화 목표 없이 포트폴리오 / 개인 사용 / 기술 학습 목적** 으로 유지됩니다.
+
+| | |
+|---|---|
+| **단계** | MVP (Phase 1~6) 완료 + 확장 D-013 ~ D-021 적용. 추가 활성 개발 없음. |
+| **운영** | Vercel + Supabase **무료 티어 한도 내** 에서만 운영. Google OAuth 는 testing 모드 (수동 등록). |
+| **수익화** | 검토했으나 unit economics 비현실적 (FigJam / Miro / tldraw.com 등 자본·기능 압도적 + tldraw 상업 라이선스 비용 + 영업 비용 vs 예상 ARPU). 무료 운영 유지. |
+| **개선 여지** | 있음 — 아래 [§ 미래 후보](#-미래-후보-future-candidates) 참조. 다만 적극적 로드맵 없음. |
+
+> ⚠ tldraw v5 의 **Hobby License** 가 신청 완료 전까지 production (`onuri-studio.vercel.app`) 에선 캔버스가 5초 뒤 사라짐 (`display:none`). 로컬 dev (`localhost`) 에선 정상 동작.
+
+---
+
+## 🎯 왜 만들었는가 / 무엇을 배웠는가
+
+### 동기
+1. **실시간 협업 시스템** 을 처음부터 직접 만들어보고 싶었음 — CRDT vs LWW, presence, cursor sync, snapshot 보존, 재연결 복구 같은 문제들을 책이 아니라 코드로 부딪혀보기.
+2. **shape-level customization** 이 필요한 캔버스 시스템 (tldraw v5 의 custom shape, custom style, custom toolbar) 의 실제 사용 한계 탐색.
+3. **익명 + Google OAuth 병행 흐름** + **권한 요청·승인 inbox** 같은 비-trivial UX 패턴 직접 설계.
+4. **Google Drive API + Picker SDK + drive.file scope** 의 실제 동작 / 함정 (예: `setAppId` 누락 시 404) 경험.
+
+### 핵심으로 배운 것
+| 주제 | 배운 것 |
+|---|---|
+| **Realtime sync** | Yjs CRDT 의 학습 비용이 크다 → 우리 MVP 는 Supabase Realtime broadcast + LWW 로 빠르게 ([D-010](#-결정-이력-decision-log)). 50명+ 운영 임박 시 비로소 Yjs 마이그레이션. **"문제 크기에 맞는 도구 선택"** 의 실전. |
+| **tldraw v5** | `.configure({ getCustomDisplayValues })` 패턴 / closed TLShape union 우회 (`@ts-expect-error`) / OverflowingToolbar quirk / canEdit 과 setEditingShape 의 silent reject 동작. 라이브러리 내부를 직접 읽어야 풀리는 문제 많음. |
+| **L1 abstraction** | tldraw 표면을 `lib/editor/index.ts` 단일 모듈로 추상화 ([D-016](#-결정-이력-decision-log)) — editor 교체 가능성 + 라이선스 검토 시점에 swap 가능한 구조. |
+| **Schema 진화** | shape props 에 새 필드 추가 시 옛 snapshot 의 schema 검증 실패 → store 손상 → instance state 사라짐. pre-load migration 으로 우회. tldraw 의 schema migration API 보다 단순한 JSON 변환이 더 안전했음 ([§ 17.12](DESIGN.md#1712-d-019-후속-보강-구현-메모)). |
+| **익명 + 회원 병행** | Supabase anon 세션이 없어서 Postgres Changes RLS 막힘 → broadcast 채널 + admin client 서버 액션 우회 ([D-015](#-결정-이력-decision-log)). |
+| **OAuth scope 정책** | drive.file 같은 sensitive scope 는 verification 필요 (도메인 인증 + 데모 영상 + 약관). 소규모 indie 가 감당하기 큰 비용 → testing 모드 영구 운영 + 등록 요청 workflow ([D-021](#-결정-이력-decision-log)). |
+| **운영 비용 직시** | Supabase Pro + Vercel Pro + tldraw 상업 라이선스 + 영업 비용 vs 예상 ARPU 계산 → 무료 운영이 정답이라는 결론. 기능보다 **단위 경제** 가 의사결정의 본질. |
+
+### 다루지 않은 것 (의도적)
+- **Yjs CRDT 본격 도입** — 학습 비용 + 25명 cap 으로 MVP 운영 가능해서 보류
+- **이메일 매직 링크** — 도메인 + DKIM/SPF 인증 비용 vs 가치 판단 후 Phase 9 로 이연
+- **모바일 native** — 화이트보드 UX 가 데스크탑/태블릿 중심
+- **enterprise features** (SSO, audit log, admin controls) — 상업화 안 함
+
+---
+
+## 🛠 기술 하이라이트
+
+각 항목은 [DESIGN.md § 17](DESIGN.md#17-결정-사항-decision-log) 의 구현 메모로 직접 연결. 채용 시연 / 코드 리뷰용 인덱스.
+
+| 영역 | 결정 / 구현 | 다룬 트레이드오프 |
+|---|---|---|
+| **Realtime sync** | [D-010 + D-017](#-결정-이력-decision-log) — Supabase Realtime broadcast / presence + tldraw store diff (LWW). Smart autosave / Non-destructive reconnect / catch-up broadcast / 50ms batching / per-story 25명 정원 cap. | CRDT vs LWW 의 비용·복잡도 트레이드오프, 무료 티어 한도 안에서 50명 운영 대비 throttle 조정 ([§ 17.9](DESIGN.md#179-d-017-realtime-sync-hardening-구현-메모)) |
+| **Custom canvas shapes** | [D-018 gdrive-file](DESIGN.md#1710-d-018-google-drive-연동-구현-메모) + [D-019 table](DESIGN.md#1711-d-019-tableshape--toolbar-70vw-구현-메모) + [D-020 note author](DESIGN.md#1712-d-019-후속-보강-구현-메모) | tldraw 의 closed type union 우회, schema 진화·migration, 셀 단위 인터랙션 (편집/병합/스타일), shape 내부 z-index 종속성 |
+| **권한 요청 inbox** | [D-015](#-결정-이력-decision-log) — story-level 수정 권한 요청 / 승인 + Realtime broadcast (RLS 우회로 익명 사용자도 알림 수신) | 익명 세션의 RLS 제약, 알림 dedupe, owner 승인 후 페이지 리로드 vs router.refresh 트레이드오프 ([§ 17.6](DESIGN.md#176-d-015-수정-권한-요청-및-알림-시스템-구현-메모)) |
+| **Google OAuth 운영** | [D-013](#-결정-이력-decision-log) Google SSO + [D-021](#-결정-이력-decision-log) 테스트 모드 영구 운영 → 등록 요청 workflow | Sensitive scope verification 비용 vs testing 모드 100명 한도의 운영 절충 |
+| **Google Drive 깊이 연동** | [D-018 Phase 8b](DESIGN.md#1710-d-018-google-drive-연동-구현-메모) — Picker SDK + drive.file + Shortcut + 폴더 자동 생성 + viewer share + onDelete cleanup | client-side Drive API (server token 암호화 회피), Picker `setAppId` 함정, anyone-with-link share 의 graceful 403 |
+| **Editor abstraction L1** | [D-016](#-결정-이력-decision-log) — `lib/editor/index.ts` 단일 re-export 모듈, 9개 소비처 일괄 적용 | 미래 editor swap 비용 (Excalidraw 등) vs 현재 코드 명확성 ([§ 17.8](DESIGN.md#178-editor-교체-대비-abstraction-가이드)) |
+| **모바일·접근성 보강** | StylePanel 좁은 화면 드래그 차단 + 오버플로 스크롤 / Toolbar 70vw 임계점 조정 / `ForceDarkTheme` (스토리 페이지) / `data-theme` 분기 라이트/다크 ([D-012](#-결정-이력-decision-log)) | 좁은 viewport 에서의 UX, tldraw 의 native dblclick suppression 우회 |
+| **운영·관측** | `/admin` 페이지 — Supabase 사용량 / 권한 이력 / 알림 / D-021 등록 요청 처리 | $0 예산 안에서 셀프 모니터링, Rate limit (Postgres 카운터 기반 — Redis 없이) |
 
 ---
 
@@ -404,33 +463,49 @@ Supabase 미설정 상태에서도 dev 서버는 부팅되며, 랜딩 페이지�
 
 ---
 
-## 🧭 다음 작업
+## 🔮 미래 후보 (Future Candidates)
 
-### 신규 Onboarding (저장소를 처음 받은 사람)
+> 본 프로젝트는 **포트폴리오 모드** 입니다. 아래 항목들은 **만약** 수익화 / 개선 / 재시동 시점에 재검토할 후보 목록일 뿐, 활성 로드맵이 아닙니다.
 
-1. [`Claude.md`](Claude.md) 통독 — 제품 비전 / 인증 정책 / 데이터 모델 / 결정 이력 (§ 부록 A)
-2. [`DESIGN.md`](DESIGN.md) 통독 — 폴더 구조 / § 17 결정 메모 / § 17.7 라이선스 / § 17.8 abstraction / § 17.9 sync
-3. Supabase 무료 프로젝트 생성 → URL / anon key / service role key 확보
-4. `.env.local` 작성 + `supabase/migrations/0001~0010.sql` 차례로 SQL Editor 에서 실행
-5. `pnpm install && pnpm run dev` 으로 부팅 확인
+### 운영 안정화 (수익화 안 해도 가치 있는 항목)
 
-### 다음 작업 우선순위 (Phase 6 마무리)
+- [ ] **tldraw Hobby License 신청 + 등록** — production 캔버스 5초 사라짐 이슈 해결 (가장 큰 미해결 항목)
+- [ ] **WCAG AA 점검 + Lighthouse 모바일/접근성 90+** — Phase 6 의 마지막 미체크
+- [ ] **`/me` GoogleLinkSection 레이아웃 정리** — 현재 dt/dd 분리 적용, 원래대로 합치되 텍스트 overflow 처리 (D-021 미완료)
+- [ ] 채널/스토리 rename 시 Drive 폴더 동기 rename (D-018 deferred)
+- [ ] O-009 Channel Guide 카드 썸네일 자동 생성
 
-1. **WCAG AA 점검 + Lighthouse 모바일/접근성 90+** — 마지막 미체크 항목
-2. *(조건부)* DOMPurify — markdown / rich text / 댓글 기능 도입 시
-3. *(조건부)* 파일 업로드 magic byte 재검증 — 사용자 파일 업로드 본격 도입 시
+### 본격 사용자 확장 시 (50명+ 동시)
 
-### 50명 동시 운영이 필요해진 시점
+- [ ] **Yjs CRDT 마이그레이션** — tldraw `useYjsStore` + Supabase Storage 의 Y.Doc binary 영속 ([§ 17.9](DESIGN.md#179-d-017-realtime-sync-hardening-구현-메모))
+- [ ] 현재는 D-017 의 25명 cap + Quick wins 로 운영 가능 (Overflow 발생 시 OverflowNotice)
 
-- **Yjs CRDT 마이그레이션** — tldraw `useYjsStore` + Supabase Storage 의 Y.Doc binary 영속 ([§ 17.9](DESIGN.md#179-d-017-realtime-sync-hardening-구현-메모))
-- 현재는 D-017 의 25명 cap + Quick wins 로 운영 가능 (Overflow 발생 시 안내)
+### 상업 / 공개 launch 결정 시
 
-### 상업 launch 시점
+- [ ] tldraw **Hobby License → 상업 SDK License 구매** ([§ 17.7](DESIGN.md#177-tldraw-라이선스-가이드)) 또는 **Excalidraw 등 대안 editor 로 swap** ([§ 17.8](DESIGN.md#178-editor-교체-대비-abstraction-가이드))
+- [ ] 도메인 구매 (`onuri.studio`) + DNS + 프로덕션 환경변수 갱신 (Phase 9)
+- [ ] **개인정보 처리방침 / 이용약관** 페이지 작성
+- [ ] **Google OAuth 검토 제출** — drive.file sensitive scope verification (도메인 인증 + 데모 영상 + 약관)
+- [ ] Phase 9: 이메일 매직 링크 (Resend 도메인 인증 + DKIM/SPF)
+- [ ] Supabase Pro 전환 시점 판단 (`/admin` 페이지의 사용량 모니터링 활용)
 
-- tldraw Hobby License → SDK License 구매 ([§ 17.7](DESIGN.md#177-tldraw-라이선스-가이드)) 또는 대안 editor 로 교체 ([§ 17.8](DESIGN.md#178-editor-교체-대비-abstraction-가이드))
-- 도메인 구매 + DNS / 프로덕션 환경변수 갱신 (Phase 9)
-- 약관 / 개인정보처리방침
-- Supabase Pro 전환 시점 판단 (`/admin` 페이지의 사용량 모니터링 활용)
+### 사용자 확장 기능 (있으면 좋음)
+
+- [ ] DOMPurify — markdown / rich text / 댓글 도입 시
+- [ ] 파일 업로드 magic byte 재검증 — 사용자 파일 본격 도입 시
+- [ ] 음성/영상 채팅 통합
+- [ ] 모바일 native 앱 (React Native or PWA 강화)
+
+---
+
+## 🧭 새로 저장소 받은 사람 (Onboarding)
+
+1. **[`docs/USER_MANUAL.md`](docs/USER_MANUAL.md)** 로 결과물 먼저 확인 (스크린샷 + 데모 영상)
+2. **[`HANDOFF.md`](HANDOFF.md)** 로 환경 설정 + 현재 상태 파악
+3. [`Claude.md`](Claude.md) 부록 A — 제품 비전 / 결정 이력
+4. [`DESIGN.md`](DESIGN.md) § 17 — 구현 메모 (CRDT / 라이선스 / abstraction / sync 등)
+5. Supabase 무료 프로젝트 생성 → `.env.local` 작성 + `supabase/migrations/0001~0013.sql` 순차 실행
+6. `pnpm install && pnpm run dev`
 
 ---
 
